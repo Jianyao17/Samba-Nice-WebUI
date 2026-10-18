@@ -1,0 +1,28 @@
+services:
+  samba-webui:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: samba-nice-webui
+    restart: unless-stopped
+    # 1. Share host PID namespace to send SIGHUP reload signal to host smbd
+    pid: "host"
+    network_mode: "host"
+    environment:
+      - WEBUI_HOST=0.0.0.0
+      - WEBUI_PORT=8080
+      - WEBUI_SECRET_KEY=${WEBUI_SECRET_KEY:-change-this-secret-key-in-production}
+      - WEBUI_ADMIN_USER=${WEBUI_ADMIN_USER:-admin}
+      - WEBUI_ADMIN_PASSWORD=${WEBUI_ADMIN_PASSWORD:-adminpassword}
+      - SAMBA_CONF_PATH=/etc/samba/smb.conf
+      - SAMBA_INCLUDE_CONF_PATH=${SAMBA_INCLUDE_CONF_PATH:-/etc/samba/smb.webui.conf}
+      - SAMBA_BACKUP_DIR=/etc/samba/.backups
+      - SAMBA_PID_FILE=/var/run/samba/smbd.pid
+      - ALLOWED_STORAGE_ROOTS=${ALLOWED_STORAGE_ROOTS:-/storage}
+      - SAMBA_BACKEND=linux
+    volumes:
+      # 2. Host Samba configurations and PID socket directory mounts
+      - /etc/samba:/etc/samba
+      - /var/run/samba:/var/run/samba
+      # 3. Mount host storage root to /storage inside container
+      - ${HOST_STORAGE_PATH:-/srv/samba}:/storage

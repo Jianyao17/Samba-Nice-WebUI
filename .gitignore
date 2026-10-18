@@ -1,0 +1,30 @@
+# Python bytecode and cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Virtual environments
+.venv/
+env/
+venv/
+ENV/
+
+# Environment and secrets
+.nicegui/
+.env
+*.local
+
+# IDE and editors
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Docker and test runtime artifacts
+.backups/
+temp_samba/
+storage/

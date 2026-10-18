@@ -1,0 +1,57 @@
+services:
+  # 1. Isolated Linux Samba service container
+  samba-server:
+    image: debian:bookworm-slim
+    container_name: test-samba-server
+    restart: unless-stopped
+    command: >
+      sh -c "
+        (which smbd >/dev/null 2>&1 || (apt-get update && apt-get install -y --no-install-recommends samba samba-common-bin procps)) &&
+        mkdir -p /etc/samba /var/run/samba /storage &&
+        if [ ! -f /etc/samba/smb.conf ]; then
+          printf '[global]\n   workgroup = WORKGROUP\n   server role = standalone server\n   security = user\n   map to guest = Bad User\n   pid directory = /var/run/samba\n   include = /etc/samba/smb.webui.conf\n' > /etc/samba/smb.conf;
+        fi &&
+        exec smbd --foreground --no-process-group
+      "
+    ports:
+      - "1445:445"
+      - "1139:139"
+    volumes:
+      - test_samba_conf:/etc/samba
+      - test_samba_run:/var/run/samba
+      - test_samba_storage:/storage
+
+  # 2. Samba-Nice-WebUI web application container
+  samba-webui:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: test-samba-webui
+    restart: unless-stopped
+    depends_on:
+      - samba-server
+    # Share PID namespace with samba-server container to send SIGHUP
+    pid: "service:samba-server"
+    ports:
+      - "${WEBUI_PORT:-8080}:${WEBUI_PORT:-8080}"
+    environment:
+      - WEBUI_HOST=0.0.0.0
+      - WEBUI_PORT=${WEBUI_PORT:-8080}
+      - WEBUI_SECRET_KEY=${WEBUI_SECRET_KEY:-dev-secret-key-for-testing-only}
+      - WEBUI_ADMIN_USER=${WEBUI_ADMIN_USER:-admin}
+      - WEBUI_ADMIN_PASSWORD=${WEBUI_ADMIN_PASSWORD:-adminpassword}
+      - SAMBA_CONF_PATH=/etc/samba/smb.conf
+      - SAMBA_INCLUDE_CONF_PATH=/etc/samba/smb.webui.conf
+      - SAMBA_BACKUP_DIR=/etc/samba/.backups
+      - SAMBA_PID_FILE=/var/run/samba/smbd.pid
+      - ALLOWED_STORAGE_ROOTS=/storage
+      - SAMBA_BACKEND=linux
+    volumes:
+      - test_samba_conf:/etc/samba
+      - test_samba_run:/var/run/samba
+      - test_samba_storage:/storage
+
+volumes:
+  test_samba_conf:
+  test_samba_run:
+  test_samba_storage:
