@@ -23,14 +23,12 @@ def build_backend(backup_mgr: BackupManager) -> SambaBackend:
             include_conf_path=settings.samba_include_conf_path,
             pid_file=settings.samba_pid_file,
             backup_manager=backup_mgr,
-            main_conf_path=settings.samba_conf_path
         )
 
     return LinuxHostSambaBackend(
         include_conf_path=settings.samba_include_conf_path,
         pid_file=settings.samba_pid_file,
         backup_manager=backup_mgr,
-        main_conf_path=settings.samba_conf_path
     )
 
 
@@ -38,7 +36,6 @@ def build_backend(backup_mgr: BackupManager) -> SambaBackend:
 backup_manager = BackupManager(
     backup_dir=settings.samba_backup_dir,
     include_conf_path=settings.samba_include_conf_path,
-    main_conf_path=settings.samba_conf_path
 )
 
 backend = build_backend(backup_manager)

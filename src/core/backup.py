@@ -2,7 +2,6 @@ import json
 import shutil
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
 
 from src.core.models import BackupSnapshot
 
@@ -15,11 +14,10 @@ class BackupManager:
     modification, or deletion. Enables safe single-click rollback of configuration states.
     """
 
-    def __init__(self, backup_dir: Path, include_conf_path: Path, main_conf_path: Optional[Path] = None):
+    def __init__(self, backup_dir: Path, include_conf_path: Path):
         # 1. Initialize directory references and ensure backup storage directory exists
         self.backup_dir = backup_dir
         self.include_conf_path = include_conf_path
-        self.main_conf_path = main_conf_path
 
         self.backup_dir.mkdir(parents=True, exist_ok=True)
 
@@ -38,13 +36,7 @@ class BackupManager:
             shutil.copy2(self.include_conf_path, dest)
             copied_files.append(self.include_conf_path.name)
 
-        # 3. Copy main smb.conf file if it exists
-        if self.main_conf_path and self.main_conf_path.exists():
-            dest_main = target_dir / self.main_conf_path.name
-            shutil.copy2(self.main_conf_path, dest_main)
-            copied_files.append(self.main_conf_path.name)
-
-        # 4. Save metadata descriptor JSON file
+        # 3. Save metadata descriptor JSON file
         snapshot = BackupSnapshot(
             snapshot_id=snapshot_id,
             created_at=now,
@@ -86,12 +78,6 @@ class BackupManager:
         if source_include.exists():
             self.include_conf_path.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(source_include, self.include_conf_path)
-
-        # 3. Restore main smb.conf if present in the snapshot
-        if self.main_conf_path:
-            source_main = target_dir / self.main_conf_path.name
-            if source_main.exists():
-                shutil.copy2(source_main, self.main_conf_path)
 
         return True
 

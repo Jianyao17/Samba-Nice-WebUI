@@ -10,7 +10,10 @@ class Settings(BaseSettings):
     Application configuration schema loaded from environment variables and .env file.
 
     Provides centralized, typed settings for WebUI network bindings, authentication
-    credentials, Samba configuration paths, and allowed storage boundary directories.
+    credentials, the dedicated Samba include file path, and allowed storage boundary directories.
+
+    The primary smb.conf is never read or written by this application — only the dedicated
+    include file (SAMBA_INCLUDE_CONF_PATH) is managed. This keeps the scope minimal and safe.
     """
 
     # 1. WebUI server credentials and network bindings
@@ -20,8 +23,9 @@ class Settings(BaseSettings):
     webui_admin_password: str = "adminpassword"
     webui_secret_key: str = "change-this-secret-key-in-production"
 
-    # 2. Samba host configuration file paths and PID tracking
-    samba_conf_path: Path = Path("/etc/samba/smb.conf")
+    # 2. Samba paths — only the dedicated include file is managed by this app.
+    #    The primary smb.conf is NEVER read or written; the user must add one
+    #    'include = <path>' directive to it pointing at this file.
     samba_include_conf_path: Path = Path("/etc/samba/smb.webui.conf")
     samba_backup_dir: Path = Path("/etc/samba/.backups")
     samba_pid_file: Path = Path("/var/run/samba/smbd.pid")

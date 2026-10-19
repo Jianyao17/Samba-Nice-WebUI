@@ -27,7 +27,6 @@ def temp_workspace():
 
     yield {
         "root": temp_dir,
-        "conf_path": conf_dir / "smb.conf",
         "include_conf_path": include_conf,
         "backup_dir": backups,
         "storage_root": storage,
@@ -43,7 +42,6 @@ def backup_mgr(temp_workspace):
     return BackupManager(
         backup_dir=temp_workspace["backup_dir"],
         include_conf_path=temp_workspace["include_conf_path"],
-        main_conf_path=temp_workspace["conf_path"]
     )
 
 
@@ -53,7 +51,6 @@ def mock_backend(temp_workspace, backup_mgr):
         include_conf_path=temp_workspace["include_conf_path"],
         pid_file=temp_workspace["pid_file"],
         backup_manager=backup_mgr,
-        main_conf_path=temp_workspace["conf_path"]
     )
 
 

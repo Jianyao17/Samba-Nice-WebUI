@@ -31,13 +31,11 @@ class LinuxHostSambaBackend(SambaBackend):
         include_conf_path: Path,
         pid_file: Path,
         backup_manager: BackupManager,
-        main_conf_path: Optional[Path] = None
     ):
         # 1. Initialize file references and backup manager
         self.pid_file = pid_file
         self.include_conf_path = include_conf_path
         self.backup_manager = backup_manager
-        self.main_conf_path = main_conf_path
         self.last_reloaded_at: Optional[datetime] = None
 
         self.include_conf_path.parent.mkdir(parents=True, exist_ok=True)
@@ -107,8 +105,8 @@ class LinuxHostSambaBackend(SambaBackend):
     def save_share(self, share: ShareConfig) -> ValidationResult:
         # 1. Sanitize share name
         clean_name = sanitize_share_name(share.name)
-        share.name = clean_name
         share.conf_file = self.include_conf_path.name
+        share.name = clean_name
 
         # 2. Update existing share list or append new share
         current_shares = self.list_shares()

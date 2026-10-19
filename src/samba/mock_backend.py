@@ -26,13 +26,11 @@ class MockSambaBackend(SambaBackend):
         include_conf_path: Path,
         pid_file: Path,
         backup_manager: BackupManager,
-        main_conf_path: Optional[Path] = None
     ):
         # 1. Initialize file references and backup manager
         self.include_conf_path = include_conf_path
         self.pid_file = pid_file
         self.backup_manager = backup_manager
-        self.main_conf_path = main_conf_path
         self.last_reloaded_at: Optional[datetime] = datetime.now()
 
         self.include_conf_path.parent.mkdir(parents=True, exist_ok=True)
@@ -53,9 +51,6 @@ class MockSambaBackend(SambaBackend):
                 conf_file=self.include_conf_path.name
             )
             self.include_conf_path.write_text(serialize_all_shares([sample_share]), encoding="utf-8")
-
-    def get_status() -> ServerStatus:
-        pass
 
     def get_status(self) -> ServerStatus:
         # 1. Return mock active server status
