@@ -38,20 +38,30 @@ def test_full_application_workflow(mock_backend, storage_mgr, backup_mgr, temp_w
     # 6. Verify automatic snapshot was created during save
     snapshots = backup_mgr.list_snapshots()
     assert len(snapshots) >= 1
-    latest_snapshot = snapshots[0]
 
-    # 7. Delete share and verify removal
+    # 7. Saving the exact same configuration again must not duplicate snapshots
+    mock_backend.save_share(new_share)
+    snapshot_count = len(backup_mgr.list_snapshots())
+    mock_backend.save_share(new_share)
+    assert len(backup_mgr.list_snapshots()) == snapshot_count
+
+    # 8. Delete share and verify a new history entry is recorded
+    snapshot_count = len(backup_mgr.list_snapshots())
     deleted = mock_backend.delete_share("project_docs")
     assert deleted is True
     assert mock_backend.get_share("project_docs") is None
+    assert len(backup_mgr.list_snapshots()) == snapshot_count + 1
 
-    # 8. Rollback using the snapshot recorded before deletion
-    deletion_snapshot = backup_mgr.list_snapshots()[0]
-    rollback_ok = backup_mgr.restore_snapshot(deletion_snapshot.snapshot_id)
-    assert rollback_ok is True
+    deletion_entry = backup_mgr.list_snapshots()[0]
+    assert deletion_entry.description == "Deleted share 'project_docs'"
+
+    # 9. Undo the deletion: share returns and the deletion entry is removed
+    count_before_undo = len(backup_mgr.list_snapshots())
+    assert backup_mgr.undo_change(deletion_entry.snapshot_id) is True
+    assert len(backup_mgr.list_snapshots()) == count_before_undo - 1
     mock_backend.reload_service()
 
-    # 9. Verify share is restored after rollback
+    # 10. Verify share is restored after undo
     restored_share = mock_backend.get_share("project_docs")
     assert restored_share is not None
     assert restored_share.name == "project_docs"

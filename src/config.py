@@ -22,6 +22,7 @@ class Settings(BaseSettings):
     webui_admin_user: str = "admin"
     webui_admin_password: str = "adminpassword"
     webui_secret_key: str = "change-this-secret-key-in-production"
+    webui_auto_reload: bool = False
 
     # 2. Samba paths — only the dedicated include file is managed by this app.
     #    The primary smb.conf is NEVER read or written; the user must add one

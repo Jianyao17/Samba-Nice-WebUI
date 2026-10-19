@@ -39,7 +39,7 @@ def page_layout(title: str, backend: SambaBackend):
             ui.link("Dashboard", "/").classes("text-slate-200 hover:text-white font-medium")
             ui.link("Shares", "/shares").classes("text-slate-200 hover:text-white font-medium")
             ui.link("Storage", "/storage").classes("text-slate-200 hover:text-white font-medium")
-            ui.link("Backups", "/backups").classes("text-slate-200 hover:text-white font-medium")
+            ui.link("History", "/backups").classes("text-slate-200 hover:text-white font-medium")
 
         with ui.row().classes("items-center gap-3"):
             # Status indicator badge

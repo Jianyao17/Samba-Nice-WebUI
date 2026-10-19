@@ -60,7 +60,11 @@ def create_storage_page(backend: SambaBackend, dir_manager: StorageDirectoryMana
 
         def render_directory_contents():
             table_container.clear()
-            items = dir_manager.list_directory(current_path_state["path"])
+            try:
+                items = dir_manager.list_directory(current_path_state["path"])
+            except Exception as err:
+                ui.notify(f"Cannot read directory: {err}", type="negative")
+                items = []
 
             with table_container:
                 # Parent directory button if not at absolute storage root
@@ -70,7 +74,7 @@ def create_storage_page(backend: SambaBackend, dir_manager: StorageDirectoryMana
                 from src.core.security import is_path_safe
                 allowed = [Path(r) for r in settings.parsed_storage_roots]
                 if is_path_safe(parent, allowed) and curr != parent:
-                    with ui.row().classes("items-center gap-2 p-2 hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer w-full rounded", on_click=lambda: navigate_to(str(parent))):
+                    with ui.row().classes("items-center gap-2 p-2 hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer w-full rounded").on("click", lambda p=parent: navigate_to(str(p))):
                         ui.icon("arrow_upward", size="1.2rem").classes("text-blue-500")
                         ui.label(".. (Up to parent directory)").classes("text-sm font-medium text-blue-600")
 
@@ -81,13 +85,12 @@ def create_storage_page(backend: SambaBackend, dir_manager: StorageDirectoryMana
                 for item in items:
                     with ui.row().classes("items-center justify-between p-3 border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 w-full"):
                         with ui.row().classes("items-center gap-3"):
-                            icon_name = "folder" if item["is_dir"] else "description"
-                            icon_color = "text-amber-500" if item["is_dir"] else "text-slate-400"
-                            ui.icon(icon_name, size="1.5rem").classes(icon_color)
-
                             if item["is_dir"]:
-                                ui.link(item["name"], "#").classes("text-sm font-medium text-slate-800 dark:text-slate-100 hover:underline").on("click", lambda i=item: navigate_to(i["path"]))
+                                with ui.row().classes("items-center gap-3 cursor-pointer").on("click", lambda i=item: navigate_to(i["path"])):
+                                    ui.icon("folder", size="1.5rem").classes("text-amber-500")
+                                    ui.label(item["name"]).classes("text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline")
                             else:
+                                ui.icon("description", size="1.5rem").classes("text-slate-400")
                                 ui.label(item["name"]).classes("text-sm text-slate-700 dark:text-slate-200")
 
                         with ui.row().classes("items-center gap-4 text-xs text-slate-400"):
