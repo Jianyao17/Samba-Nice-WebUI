@@ -6,8 +6,8 @@ from src.samba.backend import SambaBackend
 from src.storage.dir_manager import StorageDirectoryManager
 
 from src.ui.layout import page_layout
-from src.ui.storage_components import render_icons_view, render_list_view
-from src.ui.storage_dialogs import (
+from src.ui.storage.storage_components import render_icons_view, render_list_view
+from src.ui.storage.storage_dialogs import (
     open_delete_dialog,
     open_new_folder_dialog,
     open_rename_dialog,
