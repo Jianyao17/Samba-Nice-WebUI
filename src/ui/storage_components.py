@@ -93,6 +93,10 @@ def _list_row_item(item: dict, is_shared: bool, share_name: str | None,
                     if is_dir:
                         ui.label("Folder").classes("shrink-0")
                     else:
+                        ui.label("File").classes("shrink-0")
+                        ui.label("•").classes(
+                            "text-slate-300 dark:text-slate-600 text-xs shrink-0"
+                        )
                         ui.label(f"{item['size_bytes'] / 1024:.1f} KB").classes("font-mono shrink-0")
                     if is_shared and share_name:
                         render_smb_badge(share_name)
@@ -202,7 +206,7 @@ def _icon_tile_item(item: dict, is_shared: bool, share_name: str | None,
                 )
 
         # Bottom labels
-        subtitle = "Folder" if is_dir else f"{item['size_bytes'] / 1024:.1f} KB"
+        subtitle = "Folder" if is_dir else f"File • {item['size_bytes'] / 1024:.1f} KB"
         _tile_bottom_labels(item["name"], subtitle)
 
 

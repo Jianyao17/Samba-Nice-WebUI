@@ -20,7 +20,7 @@ Built with Python · [NiceGUI](https://nicegui.io/) · Deployed as a single non-
 | **Config Validation** | Every change is validated with `testparm` before being applied |
 | **Change History & Undo** | Linear configuration history with field-level diff preview and undo that trims newer entries |
 | **Zero-Downtime Reload** | Sends `SIGHUP` to the `smbd` master process via shared PID namespace — no Docker socket, no privileged mode |
-| **Storage Safety** | Directory browsing and creation is strictly bounded to configured storage roots |
+| **Storage Safety** | Directory browsing and creation is strictly bounded to configured storage roots — each root gets its own browser panel |
 | **Mock Dev Mode** | Fully functional UI on Windows/macOS without any Samba or Docker installation |
 
 ---
@@ -158,7 +158,7 @@ Copy `.env.example` to `.env` to get started.
 | `SAMBA_INCLUDE_CONF_PATH` | `/etc/samba/smb.webui.conf` | The only file this app reads/writes |
 | `SAMBA_BACKUP_DIR` | `/etc/samba/.backups` | Directory for configuration history entries |
 | `SAMBA_PID_FILE` | `/var/run/samba/smbd.pid` | `smbd` master PID file for `SIGHUP` reload |
-| `ALLOWED_STORAGE_ROOTS` | `/storage` | Comma-separated storage root paths (security boundary) |
+| `ALLOWED_STORAGE_ROOTS` | `/storage` | Comma-separated storage root paths (security boundary); each root appears as its own browser panel on the Storage page |
 | `SAMBA_BACKEND` | `mock` | `linux` for production, `mock` for local dev |
 
 ---

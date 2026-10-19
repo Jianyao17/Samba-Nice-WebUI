@@ -14,12 +14,27 @@ class StorageDirectoryManager:
     """
 
     def __init__(self, allowed_roots: list[str], backend: Any | None = None):
-        # 1. Initialize allowed root paths and guarantee existence
-        self.allowed_roots = allowed_roots
+        # 1. Canonicalize paths, ignore blanks, and remove duplicates while keeping order
+        normalized_roots: list[str] = []
+        for root in allowed_roots:
+            text = str(root).strip()
+            if not text:
+                continue
+            try:
+                resolved = str(Path(text).expanduser().resolve())
+            except (OSError, ValueError, RuntimeError) as err:
+                raise ValueError(f"Invalid storage root '{text}': {err}") from err
+            if resolved not in normalized_roots:
+                normalized_roots.append(resolved)
+
+        if not normalized_roots:
+            raise ValueError("At least one allowed storage root must be configured.")
+
+        # 2. Initialize allowed root paths and guarantee existence
+        self.allowed_roots = normalized_roots
         self.backend = backend
         for root_str in self.allowed_roots:
-            p = Path(root_str)
-            p.mkdir(parents=True, exist_ok=True)
+            Path(root_str).mkdir(parents=True, exist_ok=True)
 
     def is_path_shared(self, target_path: Path, backend: Any | None = None) -> tuple[bool, str | None]:
         """
