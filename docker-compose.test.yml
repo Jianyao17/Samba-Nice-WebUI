@@ -40,6 +40,8 @@ services:
       - WEBUI_SECRET_KEY=${WEBUI_SECRET_KEY:-dev-secret-key-for-testing-only}
       - WEBUI_ADMIN_USER=${WEBUI_ADMIN_USER:-admin}
       - WEBUI_ADMIN_PASSWORD=${WEBUI_ADMIN_PASSWORD:-adminpassword}
+      - WEBUI_AUTO_RELOAD=true
+      
       - SAMBA_INCLUDE_CONF_PATH=/etc/samba/smb.webui.conf
       - SAMBA_BACKUP_DIR=/etc/samba/.backups
       - SAMBA_PID_FILE=/var/run/samba/smbd.pid
@@ -49,6 +51,15 @@ services:
       - test_samba_conf:/etc/samba
       - test_samba_run:/var/run/samba
       - test_samba_storage:/storage
+    develop:
+      watch:
+        - action: sync
+          path: ./src
+          target: /app/src
+        - action: rebuild
+          path: ./pyproject.toml
+        - action: rebuild
+          path: ./uv.lock
 
 volumes:
   test_samba_conf:

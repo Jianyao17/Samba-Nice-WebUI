@@ -134,14 +134,17 @@ class LinuxHostSambaBackend(SambaBackend):
                 temp_file.unlink()
             return val_result
 
-        # 5. Snapshot backup before committing changes
-        self.backup_manager.create_snapshot(f"Before saving share '{clean_name}'")
+        # 5. Snapshot the current state before committing changes
+        self.backup_manager.create_snapshot(f"Configuration before saving share '{clean_name}'")
 
         # 6. Atomically replace dedicated include configuration file
         temp_file.replace(self.include_conf_path)
 
         # 7. Signal host daemon reload
         self.reload_service()
+
+        # 8. Record the resulting configuration as a history entry
+        self.backup_manager.create_snapshot(f"Saved share '{clean_name}'")
 
         return ValidationResult(
             is_valid=True,
@@ -157,16 +160,17 @@ class LinuxHostSambaBackend(SambaBackend):
         if len(remaining_shares) == len(current_shares):
             return False
 
-        # 2. Snapshot current configuration before deletion
-        self.backup_manager.create_snapshot(f"Before deleting share '{clean_name}'")
+        # 2. Snapshot the current state before deletion
+        self.backup_manager.create_snapshot(f"Configuration before deleting share '{clean_name}'")
 
         # 3. Write remaining shares back to the include file atomically
         temp_file = self.include_conf_path.with_name(f".tmp_{self.include_conf_path.name}")
         temp_file.write_text(serialize_all_shares(remaining_shares), encoding="utf-8")
         temp_file.replace(self.include_conf_path)
 
-        # 4. Signal host daemon reload
+        # 4. Signal host daemon reload and record the resulting configuration
         self.reload_service()
+        self.backup_manager.create_snapshot(f"Deleted share '{clean_name}'")
         return True
 
     def reload_service(self) -> bool:

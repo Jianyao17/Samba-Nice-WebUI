@@ -101,7 +101,10 @@ def create_shares_page(backend: SambaBackend, dir_manager: StorageDirectoryManag
                         return
 
                     # Create directory if it does not exist yet
-                    dir_manager.create_directory(path_val)
+                    try:
+                        dir_manager.create_directory(path_val)
+                    except Exception as err:
+                        ui.notify(f"Notice: could not auto-create directory: {err}", type="warning")
 
                     new_share = ShareConfig(
                         name=name_val,

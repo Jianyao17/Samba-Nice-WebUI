@@ -73,3 +73,6 @@ class BackupSnapshot(BaseModel):
 
     # 2. Files contained in this snapshot
     files: list[str] = Field(default_factory=list)
+
+    # 3. SHA-256 of the backed-up configuration file (empty for legacy snapshots)
+    file_hash: str = Field(default="", description="SHA-256 hash of the backed-up configuration file")

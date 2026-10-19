@@ -18,7 +18,7 @@ Built with Python · [NiceGUI](https://nicegui.io/) · Deployed as a single non-
 | **Share Management** | Full CRUD for share configurations (create, edit, delete) |
 | **Single Include File** | All managed shares live in one dedicated file — the primary `smb.conf` is never touched |
 | **Config Validation** | Every change is validated with `testparm` before being applied |
-| **Auto Backup & Rollback** | Timestamped snapshots created before every modification, single-click rollback |
+| **Change History & Undo** | Linear configuration history with field-level diff preview and undo that trims newer entries |
 | **Zero-Downtime Reload** | Sends `SIGHUP` to the `smbd` master process via shared PID namespace — no Docker socket, no privileged mode |
 | **Storage Safety** | Directory browsing and creation is strictly bounded to configured storage roots |
 | **Mock Dev Mode** | Fully functional UI on Windows/macOS without any Samba or Docker installation |
@@ -110,8 +110,8 @@ Ideal for end-to-end testing or exploring the Linux backend on Windows with Dock
 # Remove old volumes to ensure a clean smb.conf is generated
 docker compose -f docker-compose.test.yml down -v
 
-# Build and start both containers
-docker compose -f docker-compose.test.yml up --build
+# Build, start, and watch both containers
+docker compose -f docker-compose.test.yml up --build --watch
 ```
 
 | Endpoint | URL |
@@ -154,11 +154,34 @@ Copy `.env.example` to `.env` to get started.
 | `WEBUI_ADMIN_USER` | `admin` | Login username |
 | `WEBUI_ADMIN_PASSWORD` | `adminpassword` | Login password — **change in production** |
 | `WEBUI_SECRET_KEY` | *(insecure default)* | Session signing key — **must be changed** |
+| `WEBUI_AUTO_RELOAD` | `false` | Enable automatic NiceGUI reload when source files change |
 | `SAMBA_INCLUDE_CONF_PATH` | `/etc/samba/smb.webui.conf` | The only file this app reads/writes |
-| `SAMBA_BACKUP_DIR` | `/etc/samba/.backups` | Directory for timestamped config snapshots |
+| `SAMBA_BACKUP_DIR` | `/etc/samba/.backups` | Directory for configuration history entries |
 | `SAMBA_PID_FILE` | `/var/run/samba/smbd.pid` | `smbd` master PID file for `SIGHUP` reload |
 | `ALLOWED_STORAGE_ROOTS` | `/storage` | Comma-separated storage root paths (security boundary) |
 | `SAMBA_BACKEND` | `mock` | `linux` for production, `mock` for local dev |
+
+---
+
+## 🕘 Configuration History
+
+History entries are written to `SAMBA_BACKUP_DIR` using the server's **local time**:
+
+```text
+snapshot_<YYYYMMDD>T<HHMMSS>_<sha256[:8]>
+```
+
+Example: `snapshot_20261019T200548_4f9a2c7b`
+
+- The short hash is the first 8 characters of the configuration file's SHA-256.
+- Each successful save or delete records a history entry. The oldest entry is the starting point.
+- If the current include file is identical to the newest entry, no new entry is created.
+- `metadata.json` stays intentionally small: entry ID, local timestamp, description, file list, and full file hash.
+- The History page computes diffs on demand — added/removed shares plus field-level changes such as `path`, `read only`, `guest ok`, `valid users`, and `extra_options`.
+- **Undo** on an entry restores the configuration from before that change, then removes that entry and every newer entry. Undo does not create a new entry, so the timeline stays linear.
+- Undo verifies the stored file hash before writing. The active configuration is never read from history; it remains the source of truth.
+- If the active file is edited manually, a drift warning appears and the next save/delete records it as a checkpoint.
+- Legacy entries named `snapshot_YYYYMMDD_HHMMSS_ffffff` remain readable.
 
 ---
 
@@ -168,7 +191,7 @@ Copy `.env.example` to `.env` to get started.
 - **No `privileged` mode** — the container runs with default capabilities.
 - **No shell injection** — all subprocess calls use list arguments (`subprocess.run([...])`).
 - **Filesystem isolation** — `Path.resolve().is_relative_to()` prevents path traversal out of storage roots.
-- **Minimal write scope** — only the dedicated include file and backup directory are ever written to.
+- **Minimal write scope** — only the dedicated include file and history directory are ever written to.
 - **SIGHUP reload** — uses shared PID namespace (`pid: "service:samba-server"`) instead of `docker exec` or socket access.
 
 ---
@@ -193,7 +216,8 @@ samba-nice-webui/
 │   ├── core/
 │   │   ├── models.py        # Shared data models (ShareConfig, ServerStatus, …)
 │   │   ├── security.py      # Path traversal protection & auth helpers
-│   │   └── backup.py        # Timestamped snapshot manager
+│   │   ├── config_diff.py   # Share-level diff used by the History page
+│   │   └── backup.py        # Linear configuration history manager
 │   ├── samba/
 │   │   ├── backend.py       # Abstract SambaBackend interface
 │   │   ├── linux_backend.py # Production Linux host implementation
@@ -207,7 +231,7 @@ samba-nice-webui/
 │       ├── dashboard_page.py
 │       ├── shares_page.py
 │       ├── storage_page.py
-│       └── backup_page.py
+│       └── backup_page.py   # Configuration history & undo page
 ├── tests/                   # pytest unit + integration tests
 ├── Dockerfile
 ├── docker-compose.yml       # Production deployment

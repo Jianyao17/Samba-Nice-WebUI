@@ -125,12 +125,13 @@ class MockSambaBackend(SambaBackend):
                 temp_file.unlink()
             return val
 
-        # 4. Snapshot current configuration before committing
-        self.backup_manager.create_snapshot(f"Mock snapshot before saving share '{clean_name}'")
+        # 4. Snapshot the current state before committing
+        self.backup_manager.create_snapshot(f"Configuration before saving share '{clean_name}'")
         temp_file.replace(self.include_conf_path)
 
-        # 5. Update simulated reload timestamp
+        # 5. Update simulated reload timestamp and record the resulting configuration
         self.reload_service()
+        self.backup_manager.create_snapshot(f"Saved share '{clean_name}'")
 
         return ValidationResult(
             is_valid=True,
@@ -146,16 +147,17 @@ class MockSambaBackend(SambaBackend):
         if len(remaining_shares) == len(current_shares):
             return False
 
-        # 2. Snapshot current configuration before deletion
-        self.backup_manager.create_snapshot(f"Mock snapshot before deleting share '{clean_name}'")
+        # 2. Snapshot the current state before deletion
+        self.backup_manager.create_snapshot(f"Configuration before deleting share '{clean_name}'")
 
         # 3. Write remaining shares back to the include file atomically
         temp_file = self.include_conf_path.with_name(f".tmp_{self.include_conf_path.name}")
         temp_file.write_text(serialize_all_shares(remaining_shares), encoding="utf-8")
         temp_file.replace(self.include_conf_path)
 
-        # 4. Update simulated reload timestamp
+        # 4. Update simulated reload timestamp and record the resulting configuration
         self.reload_service()
+        self.backup_manager.create_snapshot(f"Deleted share '{clean_name}'")
         return True
 
     def reload_service(self) -> bool:

@@ -75,6 +75,6 @@ if __name__ in {"__main__", "__mp_main__"}:
         port=settings.webui_port,
         title="Samba-Nice-WebUI",
         storage_secret=settings.webui_secret_key,
-        reload=False,
+        reload=settings.webui_auto_reload,
         show=False
     )
