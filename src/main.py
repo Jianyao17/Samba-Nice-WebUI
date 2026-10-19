@@ -39,7 +39,7 @@ backup_manager = BackupManager(
 )
 
 backend = build_backend(backup_manager)
-dir_manager = StorageDirectoryManager(settings.parsed_storage_roots)
+dir_manager = StorageDirectoryManager(settings.parsed_storage_roots, backend=backend)
 
 
 # 2. Register application page routes

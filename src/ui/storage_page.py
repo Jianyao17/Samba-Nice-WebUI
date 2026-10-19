@@ -1,10 +1,18 @@
 from pathlib import Path
+
 from nicegui import ui
 
 from src.config import settings
+from src.core.security import is_path_safe
 from src.samba.backend import SambaBackend
 from src.storage.dir_manager import StorageDirectoryManager
 from src.ui.layout import page_layout
+from src.ui.storage_components import render_icons_view, render_list_view
+from src.ui.storage_dialogs import (
+    open_delete_dialog,
+    open_new_folder_dialog,
+    open_rename_dialog,
+)
 
 
 def create_storage_page(backend: SambaBackend, dir_manager: StorageDirectoryManager):
@@ -12,92 +20,133 @@ def create_storage_page(backend: SambaBackend, dir_manager: StorageDirectoryMana
         if not authenticated:
             return
 
-        # 1. State for currently inspected directory
-        current_path_state = {"path": str(Path(settings.parsed_storage_roots[0]).resolve())}
+        # ── State ────────────────────────────────────────────────────────────
+        state = {
+            "path": str(Path(settings.parsed_storage_roots[0]).resolve()),
+            "mode": "list",
+        }
 
-        with ui.row().classes("w-full items-center justify-between"):
-            ui.label("Explore files and folders within allowed storage roots").classes("text-sm text-slate-500")
+        # ── Page header (description only) ───────────────────────────────────
+        ui.label("Explore files and folders within allowed storage roots").classes(
+            "text-sm text-slate-500 mb-3"
+        )
 
-            def open_new_folder_dialog():
-                dialog = ui.dialog()
-                with dialog, ui.card().classes("p-6 max-w-md w-full"):
-                    ui.label("Create New Directory").classes("text-lg font-bold mb-3")
-                    folder_name_input = ui.input("Directory Name").props("outlined dense").classes("w-full mb-4")
+        # ── Main card (path bar + content, unified border) ────────────────────
+        with ui.card().props("flat bordered").classes(
+            "w-full p-0 rounded-xl overflow-hidden border border-slate-200 "
+            "dark:border-slate-700 bg-white dark:bg-slate-900 shadow-sm"
+        ):
+            # ── Integrated toolbar: path display + mode switch + new folder ──
+            with ui.row().classes(
+                "w-full items-center justify-between px-4 py-2.5 "
+                "bg-slate-50 dark:bg-slate-800/60 "
+                "border-b border-slate-200 dark:border-slate-700 gap-3 flex-wrap"
+            ):
+                # Left: current path
+                with ui.row().classes("items-center gap-2 flex-1 min-w-0 font-mono text-xs"):
+                    ui.icon("folder_open", size="1.35rem").classes(
+                        "text-blue-600 dark:text-blue-400 shrink-0"
+                    )
+                    path_label = ui.label(state["path"]).classes(
+                        "text-slate-700 dark:text-slate-200 truncate select-all"
+                    )
 
-                    def execute_create():
-                        name = folder_name_input.value.strip() if folder_name_input.value else ""
-                        if not name:
-                            ui.notify("Folder name is required.", type="warning")
-                            return
+                # Right: mode toggle + new folder button
+                with ui.row().classes(
+                    "items-center gap-2 w-full sm:w-auto shrink-0 "
+                    "justify-between sm:justify-end"
+                ):
+                    # Segmented toggle
+                    with ui.row().classes(
+                        "items-center p-0.5 bg-slate-200/70 dark:bg-slate-700/60 "
+                        "rounded-lg border border-slate-300/50 dark:border-slate-600/50 gap-0.5"
+                    ):
+                        list_btn = (
+                            ui.button(icon="view_list", on_click=lambda: _switch_mode("list"))
+                            .props("dense flat no-caps")
+                            .classes("rounded-md px-2.5 py-1")
+                            .tooltip("List view")
+                        )
+                        icons_btn = (
+                            ui.button(icon="grid_view", on_click=lambda: _switch_mode("icons"))
+                            .props("dense flat no-caps")
+                            .classes("rounded-md px-2.5 py-1")
+                            .tooltip("Icons view")
+                        )
 
-                        target = Path(current_path_state["path"]) / name
-                        try:
-                            dir_manager.create_directory(str(target))
-                            ui.notify(f"Created folder '{name}' successfully.", type="positive")
-                            dialog.close()
-                            render_directory_contents()
-                        except PermissionError as err:
-                            ui.notify(str(err), type="negative")
+                    # New folder button
+                    ui.button("New Folder", icon="create_new_folder", on_click=lambda: _open_new_folder())\
+                        .props("unelevated dense no-caps color=primary")\
+                        .classes("rounded-lg px-3 h-9 shadow-sm")\
+                        .tooltip("New folder")
 
-                    with ui.row().classes("justify-end gap-3 w-full"):
-                        ui.button("Cancel", on_click=dialog.close).props("flat")
-                        ui.button("Create", on_click=execute_create).props("unelevated").classes("bg-blue-600 text-white")
+            # ── Directory content ─────────────────────────────────────────────
+            content = ui.column().classes("w-full p-0 gap-0")
 
-                dialog.open()
+        # ── Helpers / callbacks ───────────────────────────────────────────────
+        def _refresh():
+            _update_toggle_styles()
+            render_directory_contents()
 
-            ui.button("New Folder", icon="create_new_folder", on_click=open_new_folder_dialog).props("unelevated").classes("bg-blue-600 text-white rounded-lg")
+        def _switch_mode(mode: str):
+            state["mode"] = mode
+            _refresh()
 
-        # 2. Path navigation bar
-        path_label = ui.label(current_path_state["path"]).classes("text-xs font-mono bg-slate-100 dark:bg-slate-800 p-3 rounded-lg w-full border border-slate-200 dark:border-slate-700")
+        def _open_new_folder():
+            open_new_folder_dialog(state["path"], dir_manager, on_done=render_directory_contents)
 
-        # 3. Directory listing container
-        table_container = ui.column().classes("w-full mt-2")
+        def _on_rename(item: dict, is_shared: bool):
+            open_rename_dialog(item, is_shared, dir_manager, backend, on_done=render_directory_contents)
+
+        def _on_delete(item: dict, is_shared: bool):
+            open_delete_dialog(item, is_shared, dir_manager, backend, on_done=render_directory_contents)
+
+        def _update_toggle_styles():
+            is_list = state["mode"] == "list"
+            active   = "unelevated color=primary text-color=white"
+            inactive = "flat color=grey-7"
+            remove_active   = "flat color=grey-7"
+            remove_inactive = "unelevated color=primary text-color=white"
+
+            list_btn.props(active if is_list else inactive,
+                           remove=remove_active if is_list else remove_inactive)
+            icons_btn.props(inactive if is_list else active,
+                            remove=remove_inactive if is_list else remove_active)
 
         def navigate_to(new_path: str):
-            current_path_state["path"] = new_path
+            state["path"] = new_path
             path_label.set_text(new_path)
             render_directory_contents()
 
         def render_directory_contents():
-            table_container.clear()
+            content.clear()
             try:
-                items = dir_manager.list_directory(current_path_state["path"])
+                items = dir_manager.list_directory(state["path"])
             except Exception as err:
                 ui.notify(f"Cannot read directory: {err}", type="negative")
                 items = []
 
-            with table_container:
-                # Parent directory button if not at absolute storage root
-                curr = Path(current_path_state["path"])
-                parent = curr.parent
+            shares = backend.list_shares()
+            share_map: dict[Path, str] = {}
+            for s in shares:
+                try:
+                    share_map[Path(s.path).resolve()] = s.name
+                except Exception:
+                    continue
 
-                from src.core.security import is_path_safe
-                allowed = [Path(r) for r in settings.parsed_storage_roots]
-                if is_path_safe(parent, allowed) and curr != parent:
-                    with ui.row().classes("items-center gap-2 p-2 hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer w-full rounded").on("click", lambda p=parent: navigate_to(str(p))):
-                        ui.icon("arrow_upward", size="1.2rem").classes("text-blue-500")
-                        ui.label(".. (Up to parent directory)").classes("text-sm font-medium text-blue-600")
+            curr = Path(state["path"])
+            parent = curr.parent
+            allowed = [Path(r) for r in settings.parsed_storage_roots]
+            can_go_up = is_path_safe(parent, allowed) and curr != parent
 
-                if not items:
-                    ui.label("This directory is empty.").classes("text-sm text-slate-400 italic py-4")
-                    return
+            with content:
+                if state["mode"] == "list":
+                    render_list_view(items, share_map, can_go_up, parent,
+                                     navigate_to, _on_rename, _on_delete)
+                else:
+                    render_icons_view(items, share_map, can_go_up, parent,
+                                      navigate_to, _on_rename, _on_delete)
 
-                for item in items:
-                    with ui.row().classes("items-center justify-between p-3 border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 w-full"):
-                        with ui.row().classes("items-center gap-3"):
-                            if item["is_dir"]:
-                                with ui.row().classes("items-center gap-3 cursor-pointer").on("click", lambda i=item: navigate_to(i["path"])):
-                                    ui.icon("folder", size="1.5rem").classes("text-amber-500")
-                                    ui.label(item["name"]).classes("text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline")
-                            else:
-                                ui.icon("description", size="1.5rem").classes("text-slate-400")
-                                ui.label(item["name"]).classes("text-sm text-slate-700 dark:text-slate-200")
-
-                        with ui.row().classes("items-center gap-4 text-xs text-slate-400"):
-                            if not item["is_dir"]:
-                                size_kb = item["size_bytes"] / 1024
-                                ui.label(f"{size_kb:.1f} KB")
-                            else:
-                                ui.label("Directory")
-
+        # ── Initial render ────────────────────────────────────────────────────
+        _update_toggle_styles()
         render_directory_contents()

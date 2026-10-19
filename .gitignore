@@ -27,4 +27,4 @@ ENV/
 # Docker and test runtime artifacts
 .backups/
 temp_samba/
-storage/
+/storage/
