@@ -10,6 +10,7 @@ from src.samba.parser import (
     sanitize_share_name,
     serialize_all_shares,
 )
+from src.samba.share_ops import ShareMutationError, prepare_share_save
 
 
 class MockSambaBackend(SambaBackend):
@@ -94,30 +95,24 @@ class MockSambaBackend(SambaBackend):
         except Exception as exc:
             return ValidationResult(is_valid=False, message=f"Parse error: {str(exc)}")
 
-    def save_share(self, share: ShareConfig) -> ValidationResult:
-        # 1. Sanitize share name
-        clean_name = sanitize_share_name(share.name)
-        share.name = clean_name
-        share.conf_file = self.include_conf_path.name
+    def save_share(
+        self,
+        share: ShareConfig,
+        original_name: Optional[str] = None,
+    ) -> ValidationResult:
+        # 1. Build a validated create/update/rename plan (duplicate-safe)
+        try:
+            plan = prepare_share_save(self.list_shares(), share, original_name)
+        except ShareMutationError as exc:
+            return ValidationResult(is_valid=False, message=str(exc))
 
-        # 2. Update existing share list or append new share
-        current_shares = self.list_shares()
-        updated_shares: list[ShareConfig] = []
-        found = False
+        saved_share = plan.share
+        saved_share.conf_file = self.include_conf_path.name
+        original_display = original_name.strip() if original_name else None
 
-        for s in current_shares:
-            if s.name.lower() == clean_name.lower():
-                updated_shares.append(share)
-                found = True
-            else:
-                updated_shares.append(s)
-
-        if not found:
-            updated_shares.append(share)
-
-        # 3. Write updated shares to temp file and mock-validate
+        # 2. Write updated shares to temp file and mock-validate
         temp_file = self.include_conf_path.with_name(f".tmp_{self.include_conf_path.name}")
-        temp_file.write_text(serialize_all_shares(updated_shares), encoding="utf-8")
+        temp_file.write_text(serialize_all_shares(plan.shares), encoding="utf-8")
 
         val = self.validate_config(temp_file)
         if not val.is_valid:
@@ -125,18 +120,41 @@ class MockSambaBackend(SambaBackend):
                 temp_file.unlink()
             return val
 
-        # 4. Snapshot the current state before committing
-        self.backup_manager.create_snapshot(f"Configuration before saving share '{clean_name}'")
+        # 3. Snapshot the current state before committing
+        if plan.is_rename:
+            before_description = (
+                f"Configuration before renaming share '{original_display}' "
+                f"to '{saved_share.name}'"
+            )
+        elif original_display is not None:
+            before_description = f"Configuration before updating share '{saved_share.name}'"
+        else:
+            before_description = f"Configuration before saving share '{saved_share.name}'"
+        self.backup_manager.create_snapshot(before_description)
         temp_file.replace(self.include_conf_path)
 
-        # 5. Update simulated reload timestamp and record the resulting configuration
+        # 4. Update simulated reload timestamp and record the resulting configuration
         self.reload_service()
-        self.backup_manager.create_snapshot(f"Saved share '{clean_name}'")
+        if plan.is_rename:
+            after_description = f"Renamed share '{original_display}' to '{saved_share.name}'"
+        elif original_display is not None:
+            after_description = f"Updated share '{saved_share.name}'"
+        else:
+            after_description = f"Saved share '{saved_share.name}'"
+        self.backup_manager.create_snapshot(after_description)
 
-        return ValidationResult(
-            is_valid=True,
-            message=f"Share '{clean_name}' saved to {self.include_conf_path.name} (Mock)."
-        )
+        # 5. Return a message describing the applied operation
+        if plan.is_rename:
+            message = (
+                f"Share '{original_display}' renamed to '{saved_share.name}' "
+                f"and applied (Mock)."
+            )
+        elif original_display is not None:
+            message = f"Share '{saved_share.name}' updated and applied (Mock)."
+        else:
+            message = f"Share '{saved_share.name}' created and applied (Mock)."
+
+        return ValidationResult(is_valid=True, message=message)
 
     def delete_share(self, name: str) -> bool:
         # 1. Sanitize requested share name

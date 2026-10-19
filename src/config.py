@@ -31,11 +31,16 @@ class Settings(BaseSettings):
     samba_backup_dir: Path = Path("/etc/samba/.backups")
     samba_pid_file: Path = Path("/var/run/samba/smbd.pid")
 
-    # 3. Allowed directory roots (accepts raw string or list)
+    # 3. Public SMB endpoint used only for displaying client access addresses.
+    #    Leave the host empty to fall back to the WebUI request hostname.
+    samba_smb_host: str = ""
+    samba_smb_port: int = 445
+
+    # 4. Allowed directory roots (accepts raw string or list)
     allowed_storage_roots: Union[str, list[str]] = "/storage"
     samba_backend: str = "linux"
 
-    # 4. Settings configuration loader from .env
+    # 5. Settings configuration loader from .env
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

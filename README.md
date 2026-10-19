@@ -15,7 +15,9 @@ Built with Python · [NiceGUI](https://nicegui.io/) · Deployed as a single non-
 | Feature | Description |
 |---|---|
 | **Dashboard** | Real-time overview of Samba service status and active share count |
-| **Share Management** | Full CRUD for share configurations (create, edit, delete) |
+| **Share Management** | Full CRUD for share configurations, including rename and duplicate-name protection |
+| **Directory Picker** | Lazy, expandable folder tree for selecting a share path inside allowed storage roots |
+| **SMB Access Address** | Each share displays a copyable `smb://` address (and Windows UNC path when applicable) |
 | **Single Include File** | All managed shares live in one dedicated file — the primary `smb.conf` is never touched |
 | **Config Validation** | Every change is validated with `testparm` before being applied |
 | **Change History & Undo** | Linear configuration history with field-level diff preview and undo that trims newer entries |
@@ -117,7 +119,7 @@ docker compose -f docker-compose.test.yml up --build --watch
 | Endpoint | URL |
 |---|---|
 | WebUI | http://localhost:8080 |
-| Samba (SMB) | `\\localhost:1445\<share_name>` (Windows Explorer) |
+| Samba (SMB) | `smb://localhost:1445/<share_name>` (also shown on each share card) |
 
 > No manual `smb.conf` editing is required for the test environment — the `docker-compose.test.yml`
 > bootstraps a minimal `smb.conf` with the `include` directive already in place.
@@ -158,6 +160,8 @@ Copy `.env.example` to `.env` to get started.
 | `SAMBA_INCLUDE_CONF_PATH` | `/etc/samba/smb.webui.conf` | The only file this app reads/writes |
 | `SAMBA_BACKUP_DIR` | `/etc/samba/.backups` | Directory for configuration history entries |
 | `SAMBA_PID_FILE` | `/var/run/samba/smbd.pid` | `smbd` master PID file for `SIGHUP` reload |
+| `SAMBA_SMB_HOST` | *(empty)* | Public hostname/IP shown in share SMB addresses; empty uses the WebUI request host |
+| `SAMBA_SMB_PORT` | `445` | Public SMB port shown in share SMB addresses (use `1445` in the test compose setup) |
 | `ALLOWED_STORAGE_ROOTS` | `/storage` | Comma-separated storage root paths (security boundary); each root appears as its own browser panel on the Storage page |
 | `SAMBA_BACKEND` | `mock` | `linux` for production, `mock` for local dev |
 
@@ -216,12 +220,14 @@ samba-nice-webui/
 │   ├── core/
 │   │   ├── models.py        # Shared data models (ShareConfig, ServerStatus, …)
 │   │   ├── security.py      # Path traversal protection & auth helpers
+│   │   ├── smb_address.py   # SMB URI / Windows UNC formatting
 │   │   ├── config_diff.py   # Share-level diff used by the History page
 │   │   └── backup.py        # Linear configuration history manager
 │   ├── samba/
 │   │   ├── backend.py       # Abstract SambaBackend interface
 │   │   ├── linux_backend.py # Production Linux host implementation
 │   │   ├── mock_backend.py  # In-memory mock for local development
+│   │   ├── share_ops.py     # Shared create/update/rename validation
 │   │   └── parser.py        # INI conf parser & serializer
 │   ├── storage/
 │   │   └── dir_manager.py   # Bounded directory manager
@@ -229,9 +235,19 @@ samba-nice-webui/
 │       ├── layout.py        # Shared page shell & navigation
 │       ├── auth_page.py     # Login page
 │       ├── dashboard_page.py
-│       ├── shares_page.py
-│       ├── storage_page.py
-│       └── backup_page.py   # Configuration history & undo page
+│       ├── shares/
+│       │   ├── shares_page.py        # Share list & page state
+│       │   ├── shares_components.py  # Share cards, badges, SMB address
+│       │   ├── shares_dialogs.py     # Editor, delete, directory dialog
+│       │   └── directory_tree.py     # Lazy expandable folder tree
+│       ├── storage/
+│       │   ├── storage_page.py       # Storage explorer page
+│       │   ├── storage_components.py # List & icon views
+│       │   └── storage_dialogs.py    # Folder dialogs
+│       └── backup/
+│           ├── backup_page.py        # Configuration history page
+│           ├── backup_components.py  # History entries & diffs
+│           └── backup_dialogs.py     # Undo dialog
 ├── tests/                   # pytest unit + integration tests
 ├── Dockerfile
 ├── docker-compose.yml       # Production deployment

@@ -39,11 +39,21 @@ def test_full_application_workflow(mock_backend, storage_mgr, backup_mgr, temp_w
     snapshots = backup_mgr.list_snapshots()
     assert len(snapshots) >= 1
 
-    # 7. Saving the exact same configuration again must not duplicate snapshots
-    mock_backend.save_share(new_share)
+    # 7. Updating the same share must not create a duplicate entry or snapshot
+    update_result = mock_backend.save_share(new_share, original_name="project_docs")
+    assert update_result.is_valid is True
     snapshot_count = len(backup_mgr.list_snapshots())
-    mock_backend.save_share(new_share)
+    second_update = mock_backend.save_share(new_share, original_name="project_docs")
+    assert second_update.is_valid is True
     assert len(backup_mgr.list_snapshots()) == snapshot_count
+    assert [share.name for share in mock_backend.list_shares()].count("project_docs") == 1
+
+    # 7b. Creating a share with an existing name is rejected
+    duplicate_result = mock_backend.save_share(
+        ShareConfig(name="project_docs", path="/storage/duplicate")
+    )
+    assert duplicate_result.is_valid is False
+    assert mock_backend.get_share("project_docs").path == str(subfolder)
 
     # 8. Delete share and verify a new history entry is recorded
     snapshot_count = len(backup_mgr.list_snapshots())

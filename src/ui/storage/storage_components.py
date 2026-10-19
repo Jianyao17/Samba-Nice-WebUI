@@ -98,9 +98,10 @@ def _list_row_item(item: dict, is_shared: bool, share_name: str | None,
                             "text-slate-300 dark:text-slate-600 text-xs shrink-0"
                         )
                         ui.label(f"{item['size_bytes'] / 1024:.1f} KB").classes("font-mono shrink-0")
+
                     if is_shared and share_name:
-                        render_smb_badge(share_name)
                         ui.label("•").classes("text-slate-300 dark:text-slate-600 text-xs shrink-0")
+                        render_smb_badge(share_name)
 
         # 3-dots action button
         with ui.button(icon="more_vert").props("flat round color=grey-7").classes(

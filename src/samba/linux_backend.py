@@ -13,6 +13,7 @@ from src.samba.parser import (
     sanitize_share_name,
     serialize_all_shares,
 )
+from src.samba.share_ops import ShareMutationError, prepare_share_save
 
 
 class LinuxHostSambaBackend(SambaBackend):
@@ -102,54 +103,71 @@ class LinuxHostSambaBackend(SambaBackend):
                 message="Binary 'testparm' not found. Ensure samba-client is installed in container."
             )
 
-    def save_share(self, share: ShareConfig) -> ValidationResult:
-        # 1. Sanitize share name
-        clean_name = sanitize_share_name(share.name)
-        share.conf_file = self.include_conf_path.name
-        share.name = clean_name
+    def save_share(
+        self,
+        share: ShareConfig,
+        original_name: Optional[str] = None,
+    ) -> ValidationResult:
+        # 1. Build a validated create/update/rename plan (duplicate-safe)
+        try:
+            plan = prepare_share_save(self.list_shares(), share, original_name)
+        except ShareMutationError as exc:
+            return ValidationResult(is_valid=False, message=str(exc))
 
-        # 2. Update existing share list or append new share
-        current_shares = self.list_shares()
-        updated_shares: list[ShareConfig] = []
-        found = False
+        saved_share = plan.share
+        saved_share.conf_file = self.include_conf_path.name
+        original_display = original_name.strip() if original_name else None
 
-        for s in current_shares:
-            if s.name.lower() == clean_name.lower():
-                updated_shares.append(share)
-                found = True
-            else:
-                updated_shares.append(s)
-
-        if not found:
-            updated_shares.append(share)
-
-        # 3. Write entire updated configuration to temporary file
+        # 2. Write entire updated configuration to temporary file
         temp_file = self.include_conf_path.with_name(f".tmp_{self.include_conf_path.name}")
-        temp_file.write_text(serialize_all_shares(updated_shares), encoding="utf-8")
+        temp_file.write_text(serialize_all_shares(plan.shares), encoding="utf-8")
 
-        # 4. Validate configuration syntax via testparm
+        # 3. Validate configuration syntax via testparm
         val_result = self.validate_config(temp_file)
         if not val_result.is_valid:
             if temp_file.exists():
                 temp_file.unlink()
             return val_result
 
-        # 5. Snapshot the current state before committing changes
-        self.backup_manager.create_snapshot(f"Configuration before saving share '{clean_name}'")
+        # 4. Snapshot the current state before committing changes
+        if plan.is_rename:
+            before_description = (
+                f"Configuration before renaming share '{original_display}' "
+                f"to '{saved_share.name}'"
+            )
+        elif original_display is not None:
+            before_description = f"Configuration before updating share '{saved_share.name}'"
+        else:
+            before_description = f"Configuration before saving share '{saved_share.name}'"
+        self.backup_manager.create_snapshot(before_description)
 
-        # 6. Atomically replace dedicated include configuration file
+        # 5. Atomically replace dedicated include configuration file
         temp_file.replace(self.include_conf_path)
 
-        # 7. Signal host daemon reload
+        # 6. Signal host daemon reload
         self.reload_service()
 
-        # 8. Record the resulting configuration as a history entry
-        self.backup_manager.create_snapshot(f"Saved share '{clean_name}'")
+        # 7. Record the resulting configuration as a history entry
+        if plan.is_rename:
+            after_description = f"Renamed share '{original_display}' to '{saved_share.name}'"
+        elif original_display is not None:
+            after_description = f"Updated share '{saved_share.name}'"
+        else:
+            after_description = f"Saved share '{saved_share.name}'"
+        self.backup_manager.create_snapshot(after_description)
 
-        return ValidationResult(
-            is_valid=True,
-            message=f"Share '{clean_name}' saved to {self.include_conf_path.name} and applied."
-        )
+        # 8. Return a message describing the applied operation
+        if plan.is_rename:
+            message = (
+                f"Share '{original_display}' renamed to '{saved_share.name}' "
+                f"and applied."
+            )
+        elif original_display is not None:
+            message = f"Share '{saved_share.name}' updated and applied."
+        else:
+            message = f"Share '{saved_share.name}' created and applied."
+
+        return ValidationResult(is_valid=True, message=message)
 
     def delete_share(self, name: str) -> bool:
         # 1. Sanitize requested share name

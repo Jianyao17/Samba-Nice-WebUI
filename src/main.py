@@ -10,8 +10,8 @@ from src.storage.dir_manager import StorageDirectoryManager
 from src.ui.auth_page import create_auth_page
 from src.ui.backup.backup_page import create_backup_page
 from src.ui.storage.storage_page import create_storage_page
+from src.ui.shares.shares_page import create_shares_page
 from src.ui.dashboard_page import create_dashboard_page
-from src.ui.shares_page import create_shares_page
 
 
 def build_backend(backup_mgr: BackupManager) -> SambaBackend:

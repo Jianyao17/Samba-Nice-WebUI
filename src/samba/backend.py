@@ -36,9 +36,18 @@ class SambaBackend(ABC):
         pass
 
     @abstractmethod
-    def save_share(self, share: ShareConfig) -> ValidationResult:
+    def save_share(
+        self,
+        share: ShareConfig,
+        original_name: Optional[str] = None,
+    ) -> ValidationResult:
         """
-        Save or update a share configuration atomically with validation and reload.
+        Create, update, or rename a share configuration atomically.
+
+        When ``original_name`` is None a new share is created; duplicate names
+        are rejected. When it is set, the existing section is replaced and may
+        be renamed to ``share.name``, provided the new name is not already used
+        by another share.
         """
         pass
 

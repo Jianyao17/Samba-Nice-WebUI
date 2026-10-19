@@ -45,7 +45,7 @@ def _render_storage_browser(
 
     # 2. Reuse the existing storage card design (toolbar + content area)
     with ui.card().props("flat bordered").classes(
-        "w-full p-0 rounded-xl overflow-hidden border border-slate-200"
+        "w-full p-0 gap-y-0 rounded-xl overflow-hidden border border-slate-200"
         "dark:border-slate-700 bg-white dark:bg-slate-900 shadow-sm"
     ):
         # ── Integrated toolbar: path display + mode switch + new folder ──

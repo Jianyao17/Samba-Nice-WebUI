@@ -17,6 +17,8 @@ services:
       - SAMBA_INCLUDE_CONF_PATH=${SAMBA_INCLUDE_CONF_PATH:-/etc/samba/smb.webui.conf}
       - SAMBA_BACKUP_DIR=/etc/samba/.backups
       - SAMBA_PID_FILE=/var/run/samba/smbd.pid
+      - SAMBA_SMB_HOST=${SAMBA_SMB_HOST:-}
+      - SAMBA_SMB_PORT=${SAMBA_SMB_PORT:-445}
       - ALLOWED_STORAGE_ROOTS=${ALLOWED_STORAGE_ROOTS:-/storage}
       - SAMBA_BACKEND=linux
     volumes:

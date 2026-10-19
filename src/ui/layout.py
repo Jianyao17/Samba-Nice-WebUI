@@ -17,7 +17,7 @@ def require_auth():
 
 
 @contextmanager
-def page_layout(title: str, backend: SambaBackend):
+def page_layout(title: str, backend: SambaBackend, *, show_title: bool = True):
     # 1. Enforce user authentication
     if not is_authenticated():
         ui.navigate.to("/login")
@@ -66,5 +66,6 @@ def page_layout(title: str, backend: SambaBackend):
             ui.button(icon="logout", on_click=handle_logout).props("flat round dense text-color=white").tooltip("Log Out")
 
     with ui.column().classes("w-full max-w-7xl mx-auto p-6 gap-6"):
-        ui.label(title).classes("text-2xl font-bold text-slate-800 dark:text-slate-100")
+        if show_title:
+            ui.label(title).classes("text-2xl font-bold text-slate-800 dark:text-slate-100")
         yield True
