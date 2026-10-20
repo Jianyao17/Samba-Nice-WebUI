@@ -199,11 +199,25 @@ Example: `snapshot_20261019T200548_4f9a2c7b`
 
 ## 🧪 Running Tests
 
+Ada dua jenis test:
+
+| Jenis | Lokasi | Butuh Samba? |
+|---|---|---|
+| Unit & workflow (mock) | `tests/unit/`, `tests/integration/test_workflow.py` | Tidak |
+| Integrasi Samba nyata | `tests/integration/test_samba_real.py` | Ya (dijalankan di container) |
+
 ```bash
-uv run pytest tests/ -v
+# Cepat, di host mana pun (test Samba nyata otomatis di-skip jika smbd tidak ada)
+uv run pytest -v
+
+# Lengkap: jalankan juga integrasi dengan smbd sungguhan di dalam container
+docker build -f Dockerfile.test -t samba-nice-test .
+docker run --rm samba-nice-test
 ```
 
-Tests use the `MockSambaBackend` and temporary directories — no Samba installation required.
+Test integrasi menjalankan `smbd` asli, menerapkan perubahan share lewat `LinuxHostSambaBackend`,
+lalu memverifikasi hasilnya dari sisi client (`smbclient`): share terlihat/hilang, upload berhasil
+atau ditolak mode read-only, dan rename/hapus benar-benar berlaku setelah reload `SIGHUP`.
 
 ---
 
