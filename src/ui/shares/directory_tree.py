@@ -64,7 +64,7 @@ class DirectoryTree:
     def render(self) -> None:
         """Build the tree and reveal the initial path when possible."""
         self._tree = ui.column().classes(
-            "w-full gap-0.5 max-h-[55vh] overflow-y-auto overflow-x-hidden "
+            "w-full gap-0.5 max-h-[42vh] overflow-y-auto overflow-x-hidden "
             "p-2 rounded-xl border border-slate-200 dark:border-slate-700 "
             "bg-white dark:bg-slate-900"
         )

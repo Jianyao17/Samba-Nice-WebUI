@@ -76,20 +76,20 @@ def _render_storage_browser(
                     list_btn = (
                         ui.button(icon="view_list", on_click=lambda: _switch_mode("list"))
                         .props("dense flat no-caps")
-                        .classes("rounded-md px-2.5 py-1")
+                        .classes("rounded-md px-1.5 py-0.5 sm:px-2.5 sm:py-1")
                         .tooltip("List view")
                     )
                     icons_btn = (
                         ui.button(icon="grid_view", on_click=lambda: _switch_mode("icons"))
                         .props("dense flat no-caps")
-                        .classes("rounded-md px-2.5 py-1")
+                        .classes("rounded-md px-1.5 py-0.5 sm:px-2.5 sm:py-1")
                         .tooltip("Icons view")
                     )
 
                 # New folder button
                 ui.button("New Folder", icon="create_new_folder", on_click=lambda: _open_new_folder())\
                     .props("unelevated dense no-caps color=primary")\
-                    .classes("rounded-lg px-3 h-9 shadow-sm")\
+                    .classes("rounded-lg px-2 h-8 text-xs sm:px-3 sm:h-9 sm:text-sm shadow-sm")\
                     .tooltip("New folder")
 
         # ── Directory content ─────────────────────────────────────────────

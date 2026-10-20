@@ -23,7 +23,9 @@ def open_rename_dialog(
         return
 
     dialog = ui.dialog()
-    with dialog, ui.card().props("flat bordered").classes("p-6 max-w-md w-full rounded-2xl shadow-xl"):
+    with dialog, ui.card().props("flat bordered").classes(
+        "p-6 max-w-md w-full max-h-[calc(100dvh-2rem)] overflow-y-auto rounded-2xl shadow-xl"
+    ):
         ui.label(f"Rename {'Folder' if item['is_dir'] else 'File'}").classes("text-lg font-bold mb-3")
         name_input = (
             ui.input("New Name", value=item["name"])
@@ -72,7 +74,9 @@ def open_delete_dialog(
         return
 
     dialog = ui.dialog()
-    with dialog, ui.card().props("flat bordered").classes("p-6 max-w-md w-full rounded-2xl shadow-xl"):
+    with dialog, ui.card().props("flat bordered").classes(
+        "p-6 max-w-md w-full max-h-[calc(100dvh-2rem)] overflow-y-auto rounded-2xl shadow-xl"
+    ):
         with ui.row().classes("items-center gap-3 mb-2"):
             ui.icon("warning", size="2rem").classes("text-red-500 shrink-0")
             ui.label(f"Delete {'Folder' if item['is_dir'] else 'File'}").classes(
@@ -113,7 +117,9 @@ def open_new_folder_dialog(
     on_done: Callable,
 ) -> None:
     dialog = ui.dialog()
-    with dialog, ui.card().props("flat bordered").classes("p-6 max-w-md w-full rounded-2xl shadow-xl"):
+    with dialog, ui.card().props("flat bordered").classes(
+        "p-6 max-w-md w-full max-h-[calc(100dvh-2rem)] overflow-y-auto rounded-2xl shadow-xl"
+    ):
         ui.label("Create New Directory").classes("text-lg font-bold mb-3")
         folder_input = (
             ui.input("Directory Name")
