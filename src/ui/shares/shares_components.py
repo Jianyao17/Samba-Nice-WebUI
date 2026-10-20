@@ -67,7 +67,7 @@ def render_smb_access(smb_uri: str, unc_path: str = "") -> None:
         ui.label(smb_uri).classes(
             "text-xs font-mono text-slate-700 dark:text-slate-200 "
             "truncate min-w-0 flex-1 select-all"
-        ).tooltip(smb_uri)
+        )
 
         def copy_address() -> None:
             ui.clipboard.write(smb_uri)
@@ -80,7 +80,7 @@ def render_smb_access(smb_uri: str, unc_path: str = "") -> None:
     if unc_path:
         ui.label(f"Windows: {unc_path}").classes(
             "w-full text-[11px] font-mono text-slate-400 truncate select-all"
-        ).tooltip(unc_path)
+        )
 
 
 def render_share_action_menu(

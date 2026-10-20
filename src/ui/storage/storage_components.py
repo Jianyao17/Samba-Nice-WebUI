@@ -87,7 +87,7 @@ def _list_row_item(item: dict, is_shared: bool, share_name: str | None,
             # Two-line text block
             with ui.element("div").classes("flex flex-col min-w-0 flex-1 justify-center"):
                 ui.label(item["name"]).classes(
-                    "text-sm font-semibold text-slate-800 dark:text-slate-100 truncate w-full block"
+                    "text-sm font-medium text-slate-800 dark:text-slate-100 truncate w-full block"
                 )
                 with ui.row().classes("items-center gap-2 flex-nowrap text-xs text-slate-400 mt-0.5"):
                     if is_dir:
@@ -152,7 +152,7 @@ _TILE_ITEM = "bg-white dark:bg-slate-900 border border-slate-200 dark:border-sla
 def _tile_bottom_labels(name: str, subtitle: str) -> None:
     with ui.element("div").classes("w-full min-w-0 flex flex-col items-center gap-0.5 mt-auto shrink-0"):
         ui.label(name).classes(
-            "w-full text-center text-sm font-semibold text-slate-800 dark:text-slate-100 truncate block px-1"
+            "w-full text-center text-sm font-medium text-slate-800 dark:text-slate-100 truncate block px-1"
         ).tooltip(name)
         ui.label(subtitle).classes("text-xs text-slate-400")
 
