@@ -57,7 +57,7 @@ and never read or modified.
 
 ## ⚠️ One-Time Host Prerequisite
 
-Before starting this app in **production** (`SAMBA_BACKEND=linux`), you must add a single
+Before starting this app in **production**, you must add a single
 `include` directive to your primary `/etc/samba/smb.conf`:
 
 ```ini
@@ -131,7 +131,7 @@ docker compose -f docker-compose.test.yml up --build --watch
 ```bash
 # 1. Copy and configure environment
 cp .env.example .env
-# Edit .env: set SAMBA_BACKEND=linux, strong WEBUI_SECRET_KEY, real paths
+# Edit .env: set a strong WEBUI_SECRET_KEY and real paths
 
 # 2. Perform the one-time smb.conf include setup (see prerequisite section above)
 
@@ -156,14 +156,11 @@ Copy `.env.example` to `.env` to get started.
 | `WEBUI_ADMIN_USER` | `admin` | Login username |
 | `WEBUI_ADMIN_PASSWORD` | `adminpassword` | Login password — **change in production** |
 | `WEBUI_SECRET_KEY` | *(insecure default)* | Session signing key — **must be changed** |
-| `WEBUI_AUTO_RELOAD` | `false` | Enable automatic NiceGUI reload when source files change |
 | `SAMBA_INCLUDE_CONF_PATH` | `/etc/samba/smb.webui.conf` | The only file this app reads/writes |
 | `SAMBA_BACKUP_DIR` | `/etc/samba/.backups` | Directory for configuration history entries |
 | `SAMBA_PID_FILE` | `/var/run/samba/smbd.pid` | `smbd` master PID file for `SIGHUP` reload |
 | `SAMBA_SMB_HOST` | *(empty)* | Public hostname/IP shown in share SMB addresses; empty uses the WebUI request host |
-| `SAMBA_SMB_PORT` | `445` | Public SMB port shown in share SMB addresses (use `1445` in the test compose setup) |
 | `ALLOWED_STORAGE_ROOTS` | `/storage` | Comma-separated storage root paths (security boundary); each root appears as its own browser panel on the Storage page |
-| `SAMBA_BACKEND` | `mock` | `linux` for production, `mock` for local dev |
 
 ---
 

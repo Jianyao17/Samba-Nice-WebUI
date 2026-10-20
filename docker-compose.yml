@@ -9,18 +9,16 @@ services:
     pid: "host"
     network_mode: "host"
     environment:
-      - WEBUI_HOST=0.0.0.0
-      - WEBUI_PORT=8080
+      - WEBUI_ADMIN_USER=${WEBUI_ADMIN_USER}
+      - WEBUI_ADMIN_PASSWORD=${WEBUI_ADMIN_PASSWORD}
       - WEBUI_SECRET_KEY=${WEBUI_SECRET_KEY:-change-this-secret-key-in-production}
-      - WEBUI_ADMIN_USER=${WEBUI_ADMIN_USER:-admin}
-      - WEBUI_ADMIN_PASSWORD=${WEBUI_ADMIN_PASSWORD:-adminpassword}
-      - SAMBA_INCLUDE_CONF_PATH=${SAMBA_INCLUDE_CONF_PATH:-/etc/samba/smb.webui.conf}
+      - ALLOWED_STORAGE_ROOTS=${ALLOWED_STORAGE_ROOTS}
+      
+      - SAMBA_INCLUDE_CONF_PATH=${SAMBA_INCLUDE_CONF_PATH}
       - SAMBA_BACKUP_DIR=/etc/samba/.backups
       - SAMBA_PID_FILE=/var/run/samba/smbd.pid
       - SAMBA_SMB_HOST=${SAMBA_SMB_HOST:-}
-      - SAMBA_SMB_PORT=${SAMBA_SMB_PORT:-445}
-      - ALLOWED_STORAGE_ROOTS=${ALLOWED_STORAGE_ROOTS:-/storage}
-      - SAMBA_BACKEND=linux
+
     volumes:
       # 2. Host Samba configurations and PID socket directory mounts
       - /etc/samba:/etc/samba

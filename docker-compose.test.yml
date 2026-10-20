@@ -34,22 +34,17 @@ services:
     # Share PID namespace with samba-server container to send SIGHUP
     pid: "service:samba-server"
     ports:
-      - "${WEBUI_PORT:-8080}:${WEBUI_PORT:-8080}"
+      - "${WEBUI_PORT:-8080}:8080"
     environment:
-      - WEBUI_HOST=0.0.0.0
-      - WEBUI_PORT=${WEBUI_PORT:-8080}
-      - WEBUI_SECRET_KEY=${WEBUI_SECRET_KEY:-dev-secret-key-for-testing-only}
       - WEBUI_ADMIN_USER=${WEBUI_ADMIN_USER:-admin}
       - WEBUI_ADMIN_PASSWORD=${WEBUI_ADMIN_PASSWORD:-adminpassword}
+      - WEBUI_SECRET_KEY=${WEBUI_SECRET_KEY:-dev-secret-key-for-testing-only}
       - WEBUI_AUTO_RELOAD=true
-      
-      - SAMBA_INCLUDE_CONF_PATH=/etc/samba/smb.webui.conf
-      - SAMBA_BACKUP_DIR=/etc/samba/.backups
-      - SAMBA_PID_FILE=/var/run/samba/smbd.pid
-      - SAMBA_SMB_HOST=localhost
-      - SAMBA_SMB_PORT=1445
+
       - ALLOWED_STORAGE_ROOTS=/storage,/media
-      - SAMBA_BACKEND=linux
+      - SAMBA_SMB_HOST=samba-server
+      - SAMBA_SMB_PORT=1445
+
     volumes:
       - test_samba_conf:/etc/samba
       - test_samba_run:/var/run/samba

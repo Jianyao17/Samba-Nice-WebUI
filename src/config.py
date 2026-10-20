@@ -17,8 +17,8 @@ class Settings(BaseSettings):
     """
 
     # 1. WebUI server credentials and network bindings
-    webui_host: str = "0.0.0.0"
     webui_port: int = 8080
+    webui_host: str = "0.0.0.0"
     webui_admin_user: str = "admin"
     webui_admin_password: str = "adminpassword"
     webui_secret_key: str = "change-this-secret-key-in-production"

@@ -1,3 +1,5 @@
+# syntax=docker/dockerfile:1
+
 # 1. Base image with Python 3.12 Debian slim
 FROM python:3.12-slim-bookworm
 
@@ -20,15 +22,19 @@ WORKDIR /app
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PATH="/app/.venv/bin:$PATH" \
-    UV_LINK_MODE=copy
+    UV_LINK_MODE=copy \
+    UV_COMPILE_BYTECODE=1 \
+    UV_NO_DEV=1
 
 # 5. Install project dependencies using uv
 COPY pyproject.toml uv.lock README.md /app/
-RUN uv sync --frozen --no-dev --no-install-project
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --locked --no-install-project
 
 # 6. Copy application source code
 COPY src/ /app/src/
-RUN uv sync --frozen --no-dev
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --locked --no-editable
 
 # 7. Expose WebUI port and define startup command
 EXPOSE 8080
