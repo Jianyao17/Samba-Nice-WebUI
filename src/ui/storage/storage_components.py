@@ -11,6 +11,8 @@ from pathlib import Path
 from typing import Callable
 from nicegui import ui
 
+from src.core.formatting import format_size
+
 
 # ─────────────────────────── shared helpers ────────────────────────────────
 
@@ -97,7 +99,7 @@ def _list_row_item(item: dict, is_shared: bool, share_name: str | None,
                         ui.label("•").classes(
                             "text-slate-300 dark:text-slate-600 text-xs shrink-0"
                         )
-                        ui.label(f"{item['size_bytes'] / 1024:.1f} KB").classes("font-mono shrink-0")
+                        ui.label(format_size(item["size_bytes"])).classes("font-mono shrink-0")
 
                     if is_shared and share_name:
                         ui.label("•").classes("text-slate-300 dark:text-slate-600 text-xs shrink-0")
@@ -207,7 +209,7 @@ def _icon_tile_item(item: dict, is_shared: bool, share_name: str | None,
                 )
 
         # Bottom labels
-        subtitle = "Folder" if is_dir else f"File • {item['size_bytes'] / 1024:.1f} KB"
+        subtitle = "Folder" if is_dir else f"File • {format_size(item['size_bytes'])}"
         _tile_bottom_labels(item["name"], subtitle)
 
 

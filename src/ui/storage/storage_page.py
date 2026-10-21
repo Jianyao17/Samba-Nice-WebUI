@@ -93,7 +93,12 @@ def _render_storage_browser(
                     .tooltip("New folder")
 
         # ── Directory content ─────────────────────────────────────────────
-        content = ui.column().classes("w-full p-0 gap-0")
+        # Bounded, independently scrollable area so many folders / multiple
+        # roots never push other browsers off-screen.
+        content = ui.column().classes(
+            "w-full p-0 gap-0 min-h-0 overflow-y-auto overscroll-contain "
+            "max-h-[55vh] sm:max-h-[60vh] lg:max-h-[70vh]"
+        )
 
     # ── Helpers / callbacks (all scoped to this browser) ──────────────────
     def _refresh():
