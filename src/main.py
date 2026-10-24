@@ -1,11 +1,11 @@
-import sys
+import os
+import shutil
+
 from nicegui import app, ui
 
 from src.config import settings
 from src.core.backup import BackupManager
-from src.samba.backend import SambaBackend
 from src.samba.linux_backend import LinuxHostSambaBackend
-from src.samba.mock_backend import MockSambaBackend
 from src.storage.dir_manager import StorageDirectoryManager
 from src.ui.auth_page import create_auth_page
 from src.ui.backup.backup_page import create_backup_page
@@ -14,35 +14,41 @@ from src.ui.shares.shares_page import create_shares_page
 from src.ui.dashboard_page import create_dashboard_page
 
 
-def build_backend(backup_mgr: BackupManager) -> SambaBackend:
-    # 1. Select backend implementation based on settings and host OS
-    backend_mode = settings.samba_backend.lower()
-
-    if backend_mode == "mock" or sys.platform == "win32":
-        return MockSambaBackend(
-            include_conf_path=settings.samba_include_conf_path,
-            pid_file=settings.samba_pid_file,
-            backup_manager=backup_mgr,
+def ensure_supported_runtime() -> None:
+    """
+    Refuse to start outside a Linux host that has Samba tooling available.
+    """
+    if os.name != "posix":
+        raise RuntimeError(
+            "Samba-Nice-WebUI requires a Linux host. "
+            "Run it with Docker instead of starting Python directly."
         )
 
-    return LinuxHostSambaBackend(
-        include_conf_path=settings.samba_include_conf_path,
-        pid_file=settings.samba_pid_file,
-        backup_manager=backup_mgr,
-    )
+    if shutil.which("testparm") is None:
+        raise RuntimeError(
+            "The 'testparm' binary is required. "
+            "Run the official Docker image or install samba-common-bin."
+        )
 
 
-# 1. Initialize core system managers
+# 1. Fail fast instead of silently degrading to a simulated backend
+ensure_supported_runtime()
+
+# 2. Initialize core system managers
 backup_manager = BackupManager(
     backup_dir=settings.samba_backup_dir,
     include_conf_path=settings.samba_include_conf_path,
 )
 
-backend = build_backend(backup_manager)
+backend = LinuxHostSambaBackend(
+    include_conf_path=settings.samba_include_conf_path,
+    pid_file=settings.samba_pid_file,
+    backup_manager=backup_manager,
+)
 dir_manager = StorageDirectoryManager(settings.parsed_storage_roots, backend=backend)
 
 
-# 2. Register application page routes
+# 3. Register application page routes
 @ui.page("/login")
 def login_route():
     create_auth_page()
@@ -68,7 +74,7 @@ def backups_route():
     create_backup_page(backend, backup_manager)
 
 
-# 3. Main execution entry point
+# 4. Main execution entry point
 if __name__ in {"__main__", "__mp_main__"}:
     ui.run(
         host=settings.webui_host,

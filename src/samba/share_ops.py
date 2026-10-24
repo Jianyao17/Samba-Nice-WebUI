@@ -1,7 +1,7 @@
 """Shared share-creation, update, and rename planning utilities.
 
-Both the Linux and mock backends use this module so that duplicate-name
-protection and rename semantics are enforced identically.
+Centralizes duplicate-name protection and rename semantics so that the Samba
+backend only has to apply already-validated plans.
 """
 
 from dataclasses import dataclass

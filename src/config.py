@@ -38,7 +38,6 @@ class Settings(BaseSettings):
 
     # 4. Allowed directory roots (accepts raw string or list)
     allowed_storage_roots: Union[str, list[str]] = "/storage"
-    samba_backend: str = "linux"
 
     # 5. Settings configuration loader from .env
     model_config = SettingsConfigDict(

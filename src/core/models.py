@@ -57,7 +57,6 @@ class ServerStatus(BaseModel):
 
     # 2. Aggregate metrics
     shares_count: int = 0
-    uptime_description: str = "Unknown"
     last_reloaded_at: Optional[datetime] = None
 
 
