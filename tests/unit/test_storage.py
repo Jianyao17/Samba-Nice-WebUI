@@ -1,5 +1,6 @@
 import pytest
 
+from src.core.models import ShareConfig
 from src.storage.dir_manager import StorageDirectoryManager
 
 
@@ -72,3 +73,59 @@ def test_storage_manager_requires_at_least_one_root():
     # 1. An empty root list is a configuration error, not a silent no-op
     with pytest.raises(ValueError, match="At least one allowed storage root"):
         StorageDirectoryManager([])
+
+
+class _FakeShareBackend:
+    """
+    Minimal backend exposing the shares used by storage safety checks.
+    """
+
+    def __init__(self, shares):
+        self._shares = shares
+
+    def list_shares(self):
+        return self._shares
+
+
+def test_storage_rejects_touching_shared_folders(storage_mgr, temp_workspace):
+    # 1. Prepare a folder tree with a share on the inner folder
+    root = temp_workspace["storage_root"]
+    container = storage_mgr.create_directory(str(root / "container"))
+    shared_dir = storage_mgr.create_directory(str(container / "shared"))
+    backend = _FakeShareBackend(
+        [ShareConfig(name="shared", path=str(shared_dir))]
+    )
+
+    # 2. The shared folder itself cannot be renamed or deleted
+    with pytest.raises(PermissionError, match="actively shared"):
+        storage_mgr.rename_directory(str(shared_dir), "renamed", backend=backend)
+    with pytest.raises(PermissionError, match="actively shared"):
+        storage_mgr.delete_directory(str(shared_dir), backend=backend)
+
+    # 3. A parent folder that contains a share is protected as well
+    with pytest.raises(PermissionError, match="actively shared"):
+        storage_mgr.delete_directory(str(container), backend=backend)
+
+    # 4. The guarded folders are left untouched
+    assert shared_dir.exists()
+    assert container.exists()
+
+
+def test_storage_rejects_deleting_folder_with_files(storage_mgr, temp_workspace):
+    # 1. A folder holding files at any depth cannot be deleted
+    root = temp_workspace["storage_root"]
+    folder = storage_mgr.create_directory(str(root / "with_files"))
+    nested = storage_mgr.create_directory(str(folder / "nested"))
+    (nested / "notes.txt").write_text("data", encoding="utf-8")
+
+    with pytest.raises(PermissionError, match="still contains files"):
+        storage_mgr.delete_directory(str(folder))
+
+    assert folder.exists()
+
+    # 2. Empty folders (even with empty subfolders) can still be deleted
+    empty = storage_mgr.create_directory(str(root / "empty"))
+    storage_mgr.create_directory(str(empty / "empty_child"))
+    storage_mgr.delete_directory(str(empty))
+
+    assert not empty.exists()
