@@ -103,3 +103,76 @@ def test_serialize_all_shares():
     assert parsed[0].name == "share1"
     assert parsed[1].name == "share2"
     assert parsed[1].read_only is True
+
+
+def test_parse_normalizes_option_keys_and_synonyms():
+    # 1. Mixed case, repeated spaces, and Samba synonyms must map to one key
+    raw_conf = """
+    [Media]
+        Path = /storage/media
+        Comment = Media files
+        Read Only = Yes
+        Browseable = No
+        Public = Yes
+        Writeable = Yes
+        Veto  Files = /tmp/*
+    """
+
+    shares = parse_conf_content(raw_conf)
+    assert len(shares) == 1
+    media = shares[0]
+
+    # 2. 'writeable = yes' is the inverted synonym of 'read only' and wins
+    assert media.path == "/storage/media"
+    assert media.read_only is False
+    assert media.browsable is False
+    assert media.guest_ok is True
+    assert media.extra_options == {"veto files": "/tmp/*"}
+
+
+def test_parse_merges_duplicate_sections_case_insensitively():
+    # 1. Manual duplicate sections differing only by case must collapse
+    raw_conf = """
+    [Data]
+        path = /storage/data
+        comment = First
+        guest ok = no
+
+    [other]
+        path = /storage/other
+
+    [data]
+        comment = Second
+        read only = yes
+    """
+
+    shares = parse_conf_content(raw_conf)
+
+    # 2. One entry per share name, with the first spelling kept
+    assert [share.name for share in shares] == ["Data", "other"]
+    data = shares[0]
+    assert data.path == "/storage/data"
+    assert data.comment == "Second"
+    assert data.read_only is True
+    assert data.guest_ok is False
+
+
+def test_duplicate_sections_do_not_survive_round_trip():
+    from src.samba.parser import serialize_all_shares
+
+    # 1. Parse a hand-edited file with a duplicated section
+    raw_conf = """
+    [data]
+        path = /storage/data
+        comment = First
+
+    [DATA]
+        comment = Second
+    """
+
+    shares = parse_conf_content(raw_conf)
+
+    # 2. Rewriting the file produces exactly one section
+    serialized = serialize_all_shares(shares)
+    assert serialized.lower().count("[data]") == 1
+    assert "comment = Second" in serialized

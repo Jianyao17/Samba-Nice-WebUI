@@ -7,6 +7,19 @@ from src.core.models import ShareConfig
 
 RESERVED_SECTION_NAMES = {"global", "homes", "printers"}
 
+# Documented Samba synonyms mapped to their canonical parameter name
+OPTION_ALIASES = {
+    "browseable": "browsable",
+    "public": "guest ok",
+}
+
+# Synonyms that express the inverse of a canonical boolean parameter
+INVERTED_OPTION_ALIASES = {
+    "writeable": "read only",
+    "writable": "read only",
+    "write ok": "read only",
+}
+
 
 def sanitize_share_name(name: str) -> str:
     # 1. Strip surrounding whitespace and remove invalid characters
@@ -33,34 +46,50 @@ def format_boolean_value(val: bool) -> str:
     return "yes" if val else "no"
 
 
+def normalize_option(key: str, value: str) -> tuple[str, str]:
+    """
+    Canonicalize a Samba parameter name and invert documented synonyms.
+    """
+    # 1. Samba parameter names ignore case and repeated whitespace
+    clean_key = " ".join(key.split()).casefold()
+
+    # 2. Inverted synonyms such as 'writeable' map to 'read only = no'
+    canonical = INVERTED_OPTION_ALIASES.get(clean_key)
+    if canonical is not None:
+        return canonical, format_boolean_value(not parse_boolean_value(value))
+
+    return OPTION_ALIASES.get(clean_key, clean_key), value
+
+
 def parse_conf_content(content: str, filename: str = "") -> list[ShareConfig]:
-    # 1. Split content by sections while preserving parameters
-    shares: list[ShareConfig] = []
+    """
+    Parse Samba configuration content into share models.
+
+    Samba treats section and parameter names case-insensitively, so duplicate
+    sections are merged into one entry with later values winning.
+    """
+    # 1. Collect sections by case-insensitive name so manual duplicates merge
+    sections: dict[str, tuple[str, dict[str, str]]] = {}
     current_section: Optional[str] = None
     section_params: dict[str, str] = {}
 
     def commit_section():
-        if current_section and current_section.lower() not in RESERVED_SECTION_NAMES:
-            path_val = section_params.get("path", "")
-            if path_val:
-                shares.append(
-                    ShareConfig(
-                        name=current_section,
-                        path=path_val,
-                        comment=section_params.get("comment", ""),
-                        read_only=parse_boolean_value(section_params.get("read only", "no")),
-                        browsable=parse_boolean_value(section_params.get("browsable", "yes")),
-                        guest_ok=parse_boolean_value(section_params.get("guest ok", "no")),
-                        valid_users=section_params.get("valid users", ""),
-                        write_list=section_params.get("write list", ""),
-                        conf_file=filename,
-                        extra_options={
-                            k: v
-                            for k, v in section_params.items()
-                            if k not in {"path", "comment", "read only", "browsable", "guest ok", "valid users", "write list"}
-                        }
-                    )
-                )
+        if not current_section:
+            return
+
+        if current_section.casefold() in RESERVED_SECTION_NAMES:
+            return
+
+        key = current_section.casefold()
+        existing = sections.get(key)
+        if existing is None:
+            sections[key] = (current_section, dict(section_params))
+            return
+
+        # Merge repeated sections: keep the first spelling, later values win
+        name, params = existing
+        params.update(section_params)
+        sections[key] = (name, params)
 
     # 2. Parse lines sequentially
     for line in content.splitlines():
@@ -81,12 +110,37 @@ def parse_conf_content(content: str, filename: str = "") -> list[ShareConfig]:
         # Parse key = value pair within section
         if "=" in line and current_section:
             key, val = line.split("=", 1)
-            clean_key = key.strip().lower()
-            clean_val = val.strip()
+            clean_key, clean_val = normalize_option(key, val.strip())
             section_params[clean_key] = clean_val
 
     # 3. Commit the last section in file
     commit_section()
+
+    # 4. Build share models, skipping sections without a target path
+    shares: list[ShareConfig] = []
+    for name, params in sections.values():
+        path_val = params.get("path", "")
+        if not path_val:
+            continue
+
+        shares.append(
+            ShareConfig(
+                name=name,
+                path=path_val,
+                comment=params.get("comment", ""),
+                read_only=parse_boolean_value(params.get("read only", "no")),
+                browsable=parse_boolean_value(params.get("browsable", "yes")),
+                guest_ok=parse_boolean_value(params.get("guest ok", "no")),
+                valid_users=params.get("valid users", ""),
+                write_list=params.get("write list", ""),
+                conf_file=filename,
+                extra_options={
+                    k: v
+                    for k, v in params.items()
+                    if k not in {"path", "comment", "read only", "browsable", "guest ok", "valid users", "write list"}
+                }
+            )
+        )
 
     return shares
 
