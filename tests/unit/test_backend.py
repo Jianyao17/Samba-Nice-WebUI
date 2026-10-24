@@ -2,7 +2,7 @@ import subprocess
 
 import pytest
 
-from src.core.models import ShareConfig
+from src.core.models import ShareConfig, ValidationResult
 from src.samba.linux_backend import LinuxHostSambaBackend
 
 
@@ -274,3 +274,76 @@ def test_get_status_reports_stopped_without_pid_file(temp_workspace, backup_mgr)
 
     assert status.is_running is False
     assert status.pid is None
+
+
+def test_save_keeps_configuration_when_validation_fails(
+    linux_backend,
+    backup_mgr,
+    temp_workspace,
+    monkeypatch,
+):
+    # 1. Snapshot the configuration and history before the rejected save
+    include_conf = temp_workspace["include_conf_path"]
+    before_content = include_conf.read_text(encoding="utf-8")
+    snapshot_count = len(backup_mgr.list_snapshots())
+
+    # 2. Reject the configuration at the validation boundary
+    monkeypatch.setattr(
+        linux_backend,
+        "validate_config",
+        lambda _path: ValidationResult(is_valid=False, message="Error parsing parameter"),
+    )
+
+    result = linux_backend.save_share(
+        ShareConfig(name="broken", path="/storage/broken")
+    )
+
+    # 3. Nothing may be written, snapshotted, or left behind as a temp file
+    assert result.is_valid is False
+    assert result.message == "Error parsing parameter"
+    assert include_conf.read_text(encoding="utf-8") == before_content
+    assert linux_backend.get_share("broken") is None
+    assert len(backup_mgr.list_snapshots()) == snapshot_count
+    assert not include_conf.with_name(f".tmp_{include_conf.name}").exists()
+
+
+def test_get_share_is_case_insensitive(linux_backend):
+    # 1. Samba section names ignore case and surrounding whitespace
+    assert linux_backend.get_share("PUBLIC") is not None
+    assert linux_backend.get_share("PUBLIC").name == "public"
+    assert linux_backend.get_share("  public  ").name == "public"
+    assert linux_backend.get_share("unknown") is None
+
+
+def test_delete_unknown_share_returns_false(linux_backend, backup_mgr):
+    # 1. Deleting a missing share must not rewrite the file or record history
+    snapshot_count = len(backup_mgr.list_snapshots())
+
+    assert linux_backend.delete_share("missing") is False
+    assert len(backup_mgr.list_snapshots()) == snapshot_count
+
+
+def test_reload_service_without_pid_file_returns_false(temp_workspace, backup_mgr):
+    # 1. A missing PID file means there is nothing to signal
+    backend = LinuxHostSambaBackend(
+        include_conf_path=temp_workspace["include_conf_path"],
+        pid_file=temp_workspace["root"] / "missing.pid",
+        backup_manager=backup_mgr,
+    )
+
+    assert backend.reload_service() is False
+    assert backend.last_reloaded_at is None
+
+
+def test_reload_service_with_invalid_pid_returns_false(temp_workspace, backup_mgr):
+    # 1. A corrupt PID file is a reload failure, not an exception
+    pid_file = temp_workspace["root"] / "broken.pid"
+    pid_file.write_text("not-a-pid", encoding="utf-8")
+    backend = LinuxHostSambaBackend(
+        include_conf_path=temp_workspace["include_conf_path"],
+        pid_file=pid_file,
+        backup_manager=backup_mgr,
+    )
+
+    assert backend.reload_service() is False
+    assert backend.last_reloaded_at is None
