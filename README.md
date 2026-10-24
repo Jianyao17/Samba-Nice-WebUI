@@ -42,6 +42,8 @@ Samba-Nice-WebUI lets you create, edit, and organize Samba shares from a clean b
 
 The filename can be anything, as long as it matches `SAMBA_INCLUDE_CONF_PATH` below.
 
+This include file is fully managed by the WebUI: the app rewrites the whole file whenever a share is saved or deleted, so comments, hand-written sections, and custom formatting there are not preserved. Put manual Samba settings in a separate include file (for example `/etc/samba/smb.custom.conf`) and add another `include = ...` line for it.
+
 **2. Create a `docker-compose.yml`:**
 
 ```yaml

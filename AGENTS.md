@@ -21,7 +21,7 @@ Samba-Nice-WebUI is a NiceGUI + Pydantic web UI for managing Samba shares on Lin
 - Share create/update/rename planning lives in `src/samba/share_ops.py`; the backend must use it so duplicate and rename rules stay identical. Names are sanitized to `\w-_.`, max 64 chars, case-insensitively unique, and `global`/`homes`/`printers` are reserved.
 - All filesystem browsing/creation/rename/delete must go through `StorageDirectoryManager` and `ensure_safe_storage_path`; resolved paths must remain under `ALLOWED_STORAGE_ROOTS`. The manager creates and canonicalizes roots at init.
 - Auth uses constant-time env-credential comparison and `app.storage.user`; `ui.run(storage_secret=...)` is required for sessions. New pages must use `page_layout` from `src/ui/layout.py` for auth and navigation.
-- Parsing lowercases option keys and skips sections without `path`; serialization rewrites the whole include file in a canonical order, so comments and unknown formatting are not preserved (unknown options survive as `extra_options`).
+- Parsing is case-insensitive: parameter keys are collapsed (repeated whitespace) and canonicalized, documented synonyms (`browseable`, `public`, `writeable`/`writable`/`write ok`) map to their canonical option, and repeated sections that differ only by case are merged with later values winning. Sections without `path` are skipped; serialization rewrites the whole include file in a canonical order, so comments and unknown formatting are not preserved (unknown options survive as `extra_options`).
 
 ## Code style
 
