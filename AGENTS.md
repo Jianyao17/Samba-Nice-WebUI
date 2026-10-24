@@ -5,7 +5,7 @@ Samba-Nice-WebUI is a NiceGUI + Pydantic web UI for managing Samba shares on Lin
 ## Commands
 
 - Install: `uv sync --extra dev` (Python >= 3.11; Docker/CI pin uv 0.5.26 and Python 3.12).
-- Dev server (mock mode on Windows/macOS): `uv run python -m src.main` after copying `.env.example` to `.env` and adjusting storage paths for the local OS.
+- Dev server: `docker compose -f docker-compose.test.yml up --build --watch` (UI on 8080, SMB on 1445). Running `uv run python -m src.main` directly is supported only on Linux with `testparm` installed; the process refuses to start elsewhere.
 - All tests: `uv run pytest -v`. Single file/test: `uv run pytest tests/unit/test_parser.py -v`, `uv run pytest -k rename`.
 - Real-Samba integration suite (skipped locally without `smbd`/`smbclient`):
   `docker build -f Dockerfile.test -t samba-nice-test .` then `docker run --rm samba-nice-test`.
@@ -14,12 +14,11 @@ Samba-Nice-WebUI is a NiceGUI + Pydantic web UI for managing Samba shares on Lin
 
 ## Architecture and invariants
 
-- `src/main.py` wires global singletons (`BackupManager` -> backend -> `StorageDirectoryManager`) and registers NiceGUI page routes. Windows always uses `MockSambaBackend`, even if `SAMBA_BACKEND=linux`.
+- `src/main.py` wires global singletons (`BackupManager` -> backend -> `StorageDirectoryManager`) and registers NiceGUI page routes. It always constructs `LinuxHostSambaBackend` and calls `ensure_supported_runtime()`, which refuses to start outside Linux or without `testparm`.
 - Only `SAMBA_INCLUDE_CONF_PATH` is read/written. Never touch the primary `smb.conf`; users add `include = ...` themselves. That include should be the last line of `[global]`, otherwise following lines are parsed as part of the first included share.
 - Linux backend validates the new file with `testparm`, atomically replaces the include file, then SIGHUP-reloads smbd. Docker needs a shared PID namespace (`pid: host` or `pid: service:samba-server`); without it the save can still succeed while the reload fails.
-- Mock backend validates by parsing only and seeds a `public` share on first run.
 - Every successful save/delete records before/after snapshots in `SAMBA_BACKUP_DIR`. Consecutive identical content is deduplicated by SHA-256; undo restores the prior state and deletes the selected entry plus all newer ones.
-- Share create/update/rename planning lives in `src/samba/share_ops.py`; both backends must use it so duplicate and rename rules stay identical. Names are sanitized to `\w-_.`, max 64 chars, case-insensitively unique, and `global`/`homes`/`printers` are reserved.
+- Share create/update/rename planning lives in `src/samba/share_ops.py`; the backend must use it so duplicate and rename rules stay identical. Names are sanitized to `\w-_.`, max 64 chars, case-insensitively unique, and `global`/`homes`/`printers` are reserved.
 - All filesystem browsing/creation/rename/delete must go through `StorageDirectoryManager` and `ensure_safe_storage_path`; resolved paths must remain under `ALLOWED_STORAGE_ROOTS`. The manager creates and canonicalizes roots at init.
 - Auth uses constant-time env-credential comparison and `app.storage.user`; `ui.run(storage_secret=...)` is required for sessions. New pages must use `page_layout` from `src/ui/layout.py` for auth and navigation.
 - Parsing lowercases option keys and skips sections without `path`; serialization rewrites the whole include file in a canonical order, so comments and unknown formatting are not preserved (unknown options survive as `extra_options`).
@@ -108,11 +107,11 @@ When asked for a commit message, inspect `git diff --staged` and `git status --s
 ## Testing gotchas
 
 - pytest is configured in `pyproject.toml` with `pythonpath = ["."]` and `asyncio_mode = "auto"`; run from the repo root.
-- Shared fixtures live in `tests/conftest.py` and use temporary directories, never the real `/etc/samba`.
+- Shared fixtures live in `tests/conftest.py` and use temporary directories, never the real `/etc/samba`. The `linux_backend` fixture stubs only the process boundaries (`testparm`, `os.kill`, `reload_service`) and seeds the `public` share explicitly.
 - `tests/integration/conftest.py` starts a real `smbd` as root on an ephemeral port with all state in `/tmp`; it skips when Samba binaries are absent. Do not use `tmp_path_factory` for Samba roots because its `0700` mode blocks guest access.
 
 ## Deployment notes
 
 - The production image contains only `testparm` (not `smbd`/`smbclient`) plus the venv. Do not assume a full Samba install at runtime.
 - CI runs unit tests via `uv sync --locked --extra dev` + `uv run pytest -v`, then the Docker integration suite. Images publish to GHCR only on `v*` tags. Keep `uv.lock` updated when dependencies change because Docker and CI use `--locked`.
-- Default paths in `src/config.py` are Linux paths. In Windows mock mode, set Windows-friendly paths in `.env`; otherwise `/etc/...` resolves relative to the current drive root.
+- Default paths in `src/config.py` are Linux paths, and the app runs only on Linux or in Docker. Direct `python -m src.main` runs outside Linux fail at startup.

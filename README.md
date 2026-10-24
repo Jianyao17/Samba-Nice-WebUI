@@ -27,7 +27,6 @@ Samba-Nice-WebUI lets you create, edit, and organize Samba shares from a clean b
 - **Safe Config Handling** – All shares live in one dedicated include file, so your main `smb.conf` is never touched. Every change is validated with `testparm` before it is applied.
 - **Change History & Undo** – A linear history with field-level diff previews and one-click undo.
 - **Zero-Downtime Reload** – Changes are applied by sending `SIGHUP` to `smbd`, so connected clients are not interrupted.
-- **Mock Dev Mode** – A fully working UI on Windows/macOS with no Samba installation required.
 
 ## 🚀 Installation (Linux + Docker Compose)
 
@@ -96,8 +95,10 @@ Settings are read from environment variables or a `.env` file (see [`.env.exampl
 | `SAMBA_PID_FILE` | `/var/run/samba/smbd.pid` | `smbd` PID file used for `SIGHUP` reload |
 | `SAMBA_SMB_HOST` | *(empty)* | Hostname/IP shown in SMB addresses. Empty uses the browser's host |
 | `SAMBA_SMB_PORT` | `445` | SMB port shown in SMB addresses |
-| `SAMBA_BACKEND` | `linux` | `linux` for a real Samba host, `mock` for an in-memory simulation |
 | `ALLOWED_STORAGE_ROOTS` | `/storage` | Comma-separated folders the WebUI may browse or create in. Each root gets its own panel |
+
+> **Migration note:** `SAMBA_BACKEND` was removed. Existing `SAMBA_BACKEND=mock`
+> entries are ignored; run the Docker stack instead.
 
 ## 💻 Local Setup
 
@@ -108,9 +109,7 @@ git clone https://github.com/Jianyao17/Samba-Nice-WebUI.git
 cd Samba-Nice-WebUI
 ```
 
-### Option A: Docker (recommended on Windows)
-
-Starts a real Samba container plus the WebUI, fully isolated from your host. Works with Docker Desktop and needs no `smb.conf` editing.
+The recommended development path is a Docker stack that runs a real `smbd` plus the WebUI, fully isolated from your host. It works with Docker Desktop and needs no `smb.conf` editing.
 
 ```bash
 docker compose -f docker-compose.test.yml up --build --watch
@@ -121,17 +120,7 @@ docker compose -f docker-compose.test.yml up --build --watch
 
 To reset everything, run `docker compose -f docker-compose.test.yml down -v`.
 
-### Option B: Manual with uv (Mock mode)
-
-**Requirements:** [uv](https://docs.astral.sh/uv/) and Python 3.11+. Runs in Mock mode, so no Samba is needed.
-
-```bash
-cp .env.example .env        # Windows: copy .env.example .env
-uv sync --extra dev
-uv run python -m src.main
-```
-
-Open http://localhost:8080 and sign in with `admin` / `adminpassword`.
+Running the app directly with `uv run python -m src.main` is supported only on Linux with `testparm` installed (for example with `sudo apt install samba-common-bin`). On Windows and macOS, use the Docker stack above.
 
 ## 🧪 Running Tests
 
@@ -162,7 +151,7 @@ src/
 ├── main.py        # Entry point and routes
 ├── config.py      # Typed settings (env → Pydantic)
 ├── core/          # Models, security, SMB address, diff, history manager
-├── samba/         # Linux and mock backends, parser, share operations
+├── samba/         # Linux backend, parser, share operations
 ├── storage/       # Bounded directory manager
 └── ui/            # Pages: dashboard, shares, storage, history
 tests/             # Unit and integration tests
