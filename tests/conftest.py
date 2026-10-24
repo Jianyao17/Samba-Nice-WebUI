@@ -1,10 +1,13 @@
+import os
 import shutil
 import tempfile
 from pathlib import Path
 import pytest
 
 from src.core.backup import BackupManager
-from src.samba.mock_backend import MockSambaBackend
+from src.core.models import ShareConfig, ValidationResult
+from src.samba.linux_backend import LinuxHostSambaBackend
+from src.samba.parser import serialize_all_shares
 from src.storage.dir_manager import StorageDirectoryManager
 
 
@@ -22,8 +25,8 @@ def temp_workspace():
     backups.mkdir(parents=True, exist_ok=True)
     storage.mkdir(parents=True, exist_ok=True)
 
-    # Write dummy smbd PID
-    pid_file.write_text("99999\n", encoding="utf-8")
+    # Point the PID file at the test process so status checks see a live daemon
+    pid_file.write_text(f"{os.getpid()}\n", encoding="utf-8")
 
     yield {
         "root": temp_dir,
@@ -46,12 +49,38 @@ def backup_mgr(temp_workspace):
 
 
 @pytest.fixture
-def mock_backend(temp_workspace, backup_mgr):
-    return MockSambaBackend(
+def linux_backend(temp_workspace, backup_mgr, monkeypatch):
+    backend = LinuxHostSambaBackend(
         include_conf_path=temp_workspace["include_conf_path"],
         pid_file=temp_workspace["pid_file"],
         backup_manager=backup_mgr,
     )
+
+    # 1. Stub external process boundaries: no SIGHUP, no Samba binary in unit CI
+    monkeypatch.setattr("src.samba.linux_backend.os.kill", lambda _pid, _sig: None)
+    monkeypatch.setattr(
+        backend,
+        "validate_config",
+        lambda _path: ValidationResult(is_valid=True, message="Validation stubbed."),
+    )
+    monkeypatch.setattr(backend, "reload_service", lambda: True)
+
+    # 2. Seed the share that the removed mock backend used to create on first run
+    public_share = ShareConfig(
+        name="public",
+        path="/storage/public",
+        comment="Public Storage",
+        read_only=False,
+        browsable=True,
+        guest_ok=True,
+        conf_file=temp_workspace["include_conf_path"].name,
+    )
+    temp_workspace["include_conf_path"].write_text(
+        serialize_all_shares([public_share]),
+        encoding="utf-8",
+    )
+
+    return backend
 
 
 @pytest.fixture
