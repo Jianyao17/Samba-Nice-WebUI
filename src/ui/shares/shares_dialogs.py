@@ -182,7 +182,7 @@ def open_share_dialog(
                     "Read Only", value=share.read_only if is_edit else False
                 )
                 browsable_check = ui.checkbox(
-                    "Browsable", value=share.browsable if is_edit else True
+                    "Browseable", value=share.browsable if is_edit else True
                 )
                 guest_ok_check = ui.checkbox(
                     "Guest OK", value=share.guest_ok if is_edit else False

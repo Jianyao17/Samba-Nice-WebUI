@@ -54,7 +54,7 @@ def _share_fields(share: ShareConfig) -> dict[str, str]:
         "path": share.path,
         "comment": share.comment,
         "read only": share.read_only,
-        "browsable": share.browsable,
+        "browseable": share.browsable,
         "guest ok": share.guest_ok,
         "valid users": share.valid_users,
         "write list": share.write_list,

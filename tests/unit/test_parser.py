@@ -5,6 +5,7 @@ from src.core.models import ShareConfig
 from src.samba.parser import (
     parse_conf_content,
     sanitize_share_name,
+    serialize_all_shares,
     serialize_share,
 )
 
@@ -44,7 +45,7 @@ def test_serialize_and_parse_share():
     assert "[media]" in serialized
     assert "path = /storage/media" in serialized
     assert "read only = yes" in serialized
-    assert "browsable = yes" in serialized
+    assert "browseable = yes" in serialized
     assert "guest ok = no" in serialized
     assert "valid users = alice, bob" in serialized
     assert "write list = alice" in serialized
@@ -112,7 +113,7 @@ def test_parse_normalizes_option_keys_and_synonyms():
         Path = /storage/media
         Comment = Media files
         Read Only = Yes
-        Browseable = No
+        Browsable = No
         Public = Yes
         Writeable = Yes
         Veto  Files = /tmp/*
@@ -157,8 +158,7 @@ def test_parse_merges_duplicate_sections_case_insensitively():
     assert data.guest_ok is False
 
 
-def test_duplicate_sections_do_not_survive_round_trip():
-    from src.samba.parser import serialize_all_shares
+def test_duplicate_sections_do_not_survive_round_trip():  
 
     # 1. Parse a hand-edited file with a duplicated section
     raw_conf = """

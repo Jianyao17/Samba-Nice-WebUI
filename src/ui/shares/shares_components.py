@@ -42,7 +42,7 @@ def render_share_badges(share: ShareConfig) -> None:
             _render_badge("Read/Write", "positive", "edit")
 
         if share.browsable:
-            _render_badge("Browsable", "primary", "visibility")
+            _render_badge("Browseable", "primary", "visibility")
         else:
             _render_badge("Hidden", "grey", "visibility_off")
 

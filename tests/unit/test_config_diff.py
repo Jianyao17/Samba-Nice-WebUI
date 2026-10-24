@@ -53,7 +53,7 @@ def test_modified_share_fields():
     assert changes["path"] == ("/storage/old", "/storage/new")
     assert changes["comment"] == ("Old comment", "New comment")
     assert changes["read only"] == ("no", "yes")
-    assert changes["browsable"] == ("yes", "no")
+    assert changes["browseable"] == ("yes", "no")
     assert changes["guest ok"] == ("no", "yes")
     assert changes["valid users"] == ("alice", "alice,bob")
     assert changes["write list"] == ("", "bob")

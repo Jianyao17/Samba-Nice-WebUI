@@ -9,7 +9,7 @@ RESERVED_SECTION_NAMES = {"global", "homes", "printers"}
 
 # Documented Samba synonyms mapped to their canonical parameter name
 OPTION_ALIASES = {
-    "browseable": "browsable",
+    "browsable": "browseable",
     "public": "guest ok",
 }
 
@@ -129,7 +129,7 @@ def parse_conf_content(content: str, filename: str = "") -> list[ShareConfig]:
                 path=path_val,
                 comment=params.get("comment", ""),
                 read_only=parse_boolean_value(params.get("read only", "no")),
-                browsable=parse_boolean_value(params.get("browsable", "yes")),
+                browsable=parse_boolean_value(params.get("browseable", "yes")),
                 guest_ok=parse_boolean_value(params.get("guest ok", "no")),
                 valid_users=params.get("valid users", ""),
                 write_list=params.get("write list", ""),
@@ -137,7 +137,7 @@ def parse_conf_content(content: str, filename: str = "") -> list[ShareConfig]:
                 extra_options={
                     k: v
                     for k, v in params.items()
-                    if k not in {"path", "comment", "read only", "browsable", "guest ok", "valid users", "write list"}
+                    if k not in {"path", "comment", "read only", "browseable", "guest ok", "valid users", "write list"}
                 }
             )
         )
@@ -164,7 +164,7 @@ def serialize_share(share: ShareConfig) -> str:
         f"    path = {share.path}",
         f"    comment = {share.comment}",
         f"    read only = {format_boolean_value(share.read_only)}",
-        f"    browsable = {format_boolean_value(share.browsable)}",
+        f"    browseable = {format_boolean_value(share.browsable)}",
         f"    guest ok = {format_boolean_value(share.guest_ok)}",
     ]
 
