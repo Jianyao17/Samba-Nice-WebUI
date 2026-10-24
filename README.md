@@ -52,7 +52,8 @@ services:
     container_name: samba-nice-webui
     restart: unless-stopped
     pid: "host"            # needed to send SIGHUP to the host's smbd
-    network_mode: "host"   # WebUI is served on the host's port 8080
+    ports:
+      - "8082:8080"
     environment:
       - WEBUI_ADMIN_USER=admin
       - WEBUI_ADMIN_PASSWORD=change-me

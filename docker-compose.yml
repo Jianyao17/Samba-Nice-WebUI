@@ -7,7 +7,8 @@ services:
     restart: unless-stopped
     # 1. Share host PID namespace to send SIGHUP reload signal to host smbd
     pid: "host"
-    network_mode: "host"
+    ports:
+      - "${WEBUI_PORT:-8080}:8080"
     environment:
       - WEBUI_ADMIN_USER=${WEBUI_ADMIN_USER}
       - WEBUI_ADMIN_PASSWORD=${WEBUI_ADMIN_PASSWORD}
