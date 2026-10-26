@@ -14,6 +14,8 @@ if [[ "${1:-}" != "--in-container" ]]; then
     docker run --rm \
         -e "VERSION=${VERSION:-}" \
         -e "OUTPUT_DIR=${OUTPUT_DIR:-}" \
+        -e "HOST_UID=$(id -u)" \
+        -e "HOST_GID=$(id -g)" \
         -v "$REPO_ROOT:/repo" \
         -w /repo \
         ubuntu:22.04 \
@@ -154,6 +156,18 @@ echo "Archive size: ${ARCHIVE_SIZE_MB} MB (${ARCHIVE_SIZE_BYTES} bytes)"
 if [[ "$ARCHIVE_SIZE_MB" -ge 200 ]]; then
     echo "Error: archive size exceeds 200 MB limit (${ARCHIVE_SIZE_MB} MB)" >&2
     exit 1
+fi
+
+# Hand build outputs back to the invoking user because the container writes as root
+if [[ -n "${HOST_UID:-}" && -n "${HOST_GID:-}" ]]; then
+    echo "Restoring ownership of build outputs to ${HOST_UID}:${HOST_GID}..."
+    chown -R "${HOST_UID}:${HOST_GID}" "$OUTPUT_DIR"
+    if [[ -f "$REPO_ROOT/pyproject.toml" ]]; then
+        chown "${HOST_UID}:${HOST_GID}" "$REPO_ROOT/pyproject.toml"
+    fi
+    if [[ -f "$REPO_ROOT/uv.lock" ]]; then
+        chown "${HOST_UID}:${HOST_GID}" "$REPO_ROOT/uv.lock"
+    fi
 fi
 
 echo "Bundle built successfully: ${BUNDLE_PATH}"

@@ -1439,7 +1439,7 @@ wheels = [
 
 [[package]]
 name = "samba-nice-webui"
-version = "0.1.0"
+version = "1.0.4"
 source = { editable = "." }
 dependencies = [
     { name = "nicegui" },
