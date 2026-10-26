@@ -141,7 +141,10 @@ def test_storage_roots_validation_and_deduplication():
         assert "Storage root must be an absolute path" in res_rel.stderr
 
         # Accept the root filesystem as a storage root
-        code_root = 'validate_storage_roots "/"'
+        code_root = """
+        validate_storage_roots "/"
+        echo "CSV: $VALIDATED_ROOTS_CSV"
+        """
         res_root = run_bash_code(code_root)
         assert res_root.returncode == 0
         assert "CSV: /" in res_root.stdout

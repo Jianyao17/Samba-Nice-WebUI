@@ -90,11 +90,9 @@ if [[ "${1:-}" == "--in-container" ]]; then
     fi
     echo "GET /login returned HTTP 200 OK!"
 
-    # Terminate server
-    kill "$SERVER_PID" 2>/dev/null || true
-    wait "$SERVER_PID" 2>/dev/null || true
+    # Stop the server and remove the temporary directory once, then disarm the trap
+    cleanup
     trap - EXIT
-    rm -rf "$TMP_DIR"
 
     echo "Checking for newly created __pycache__ files..."
     NEW_CACHES="$(find /opt/samba-nice-webui -name "__pycache__" -newer "$TIMESTAMP_FILE" 2>/dev/null || true)"
