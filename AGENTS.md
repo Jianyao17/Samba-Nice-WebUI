@@ -9,6 +9,12 @@ Samba-Nice-WebUI is a NiceGUI + Pydantic web UI for managing Samba shares on Lin
 - All tests: `uv run pytest -v`. Single file/test: `uv run pytest tests/unit/test_parser.py -v`, `uv run pytest -k rename`.
 - Real-Samba integration suite (skipped locally without `smbd`/`smbclient`):
   `docker build -f Dockerfile.test -t samba-nice-test .` then `docker run --rm samba-nice-test`.
+- Build Linux release bundle:
+  `bash scripts/build-bundle.sh`
+- Test Linux release bundle:
+  `bash scripts/tests/test-bundle.sh`
+- Verify systemd service unit:
+  `docker run --rm -v "${PWD}:/repo" -w /repo ubuntu:22.04 bash -c "apt-get update -qq && apt-get install -y -qq systemd >/dev/null && mkdir -p /opt/samba-nice-webui/venv/bin && touch /opt/samba-nice-webui/venv/bin/samba-nice-webui && chmod +x /opt/samba-nice-webui/venv/bin/samba-nice-webui && mkdir -p /etc/samba-nice-webui && touch /etc/samba-nice-webui/webui.env && systemd-analyze verify packaging/samba-nice-webui.service"`
 - Isolated dev stack: `docker compose -f docker-compose.test.yml up --build --watch` (UI on 8080, SMB on 1445). Reset with `... down -v`.
 - No linter, formatter, or typechecker is configured. Do not invent commands.
 
@@ -114,4 +120,5 @@ When asked for a commit message, inspect `git diff --staged` and `git status --s
 
 - The production image contains only `testparm` (not `smbd`/`smbclient`) plus the venv. Do not assume a full Samba install at runtime.
 - CI runs unit tests via `uv sync --locked --extra dev` + `uv run pytest -v`, then the Docker integration suite. Images publish to GHCR only on `v*` tags. Keep `uv.lock` updated when dependencies change because Docker and CI use `--locked`.
+- Release tags follow `v*` (e.g., `v0.1.0`). Pushing a `v*` tag triggers CI to test, build the Linux x86_64 bundle, generate `SHA256SUMS`, copy `scripts/setup.sh` to `samba-nice-webui-setup.sh`, and create a GitHub Release with three assets: `samba-nice-webui-<version>-linux-x86_64.tar.gz`, `samba-nice-webui-setup.sh`, and `SHA256SUMS`. The build reads the tag version and syncs `pyproject.toml` and `uv.lock` to it before packaging. Checksums are verified with `sha256sum -c SHA256SUMS`. The public setup URL is `https://github.com/Jianyao17/Samba-Nice-WebUI/releases/latest/download/samba-nice-webui-setup.sh`.
 - Default paths in `src/config.py` are Linux paths, and the app runs only on Linux or in Docker. Direct `python -m src.main` runs outside Linux fail at startup.

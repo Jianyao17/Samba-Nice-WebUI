@@ -28,7 +28,40 @@ Samba-Nice-WebUI lets you create, edit, and organize Samba shares from a clean b
 - **Change History & Undo** – A linear history with field-level diff previews and one-click undo.
 - **Zero-Downtime Reload** – Changes are applied by sending `SIGHUP` to `smbd`, so connected clients are not interrupted.
 
-## 🚀 Installation (Linux + Docker Compose)
+## 🚀 Installation
+
+### Option A: Bare-Metal (Debian 12/13 & Ubuntu 22.04/24.04, x86_64)
+
+The setup script downloads a self-contained bundle (portable Python 3.12 plus locked dependencies), installs it under `/opt/samba-nice-webui`, creates a hardened systemd service, and optionally adds the managed include line to `/etc/samba/smb.conf`. The host needs no Python, pip, uv, or compiler.
+
+```bash
+curl -fsSL https://github.com/Jianyao17/Samba-Nice-WebUI/releases/latest/download/samba-nice-webui-setup.sh | sudo bash
+```
+
+On first install it asks three questions: admin username (`admin`), admin password (blank generates one), and allowed storage roots (`/mnt`). For unattended installs:
+
+```bash
+curl -fsSL https://github.com/Jianyao17/Samba-Nice-WebUI/releases/latest/download/samba-nice-webui-setup.sh \
+  | sudo bash -s -- \
+      --non-interactive \
+      --admin-user admin \
+      --admin-password "secret" \
+      --allowed-roots /mnt/data,/mnt/media
+```
+
+**Managing the installation:**
+- **Update or roll back:** re-run the setup script without arguments, or with `--version <tag>`. Configuration, `/etc/samba/smb.webui.conf`, backups, and storage data are preserved.
+- **Change storage roots:** re-run with `--allowed-roots ...`; only `ALLOWED_STORAGE_ROOTS`, the systemd drop-in, and the service restart change.
+- **Change password or port:** edit `/etc/samba-nice-webui/webui.env` (mode `0600`) and run `sudo systemctl restart samba-nice-webui`.
+- **Uninstall:** re-run with `--uninstall` to keep shares, backups, and configuration, or add `--purge` to also remove WebUI config, backups, and the include line. Storage directories are never deleted.
+- **Preview changes:** `--dry-run` prints the planned actions without modifying the system.
+- **Get help:** `--help` lists every supported flag.
+
+> **Default root & exposure:** `/mnt` is the default storage root, so the Storage page can browse and create folders anywhere under it; use `--allowed-roots` for a dedicated folder if `/mnt` holds unrelated data. Using `/` as a root is allowed but grants the service write access to the entire filesystem through `ReadWritePaths=/`, which defeats `ProtectSystem=strict`. The service runs as root because it manages `/etc/samba` and reloads `smbd`, and is hardened with `ProtectSystem=strict`, `ProtectHome=yes`, `PrivateTmp=yes`, and `NoNewPrivileges=yes`. Do not expose port 8080 to the internet over plain HTTP; use a LAN, VPN, or TLS reverse proxy.
+
+**Troubleshooting:** `systemctl status samba-nice-webui`, `journalctl -u samba-nice-webui -f`, and `testparm -s /etc/samba/smb.conf`.
+
+### Option B: Docker Compose (All Linux Distributions)
 
 **Requirements:** a Linux host with Samba (`smbd`) installed and running, plus Docker with the Compose plugin. No need to clone the repository.
 
@@ -123,6 +156,15 @@ docker compose -f docker-compose.test.yml up --build --watch
 To reset everything, run `docker compose -f docker-compose.test.yml down -v`.
 
 Running the app directly with `uv run python -m src.main` is supported only on Linux with `testparm` installed (for example with `sudo apt install samba-common-bin`). On Windows and macOS, use the Docker stack above.
+
+### Building & Testing the Release Bundle
+
+```bash
+bash scripts/build-bundle.sh
+bash scripts/tests/test-bundle.sh
+```
+
+Both commands run in an `ubuntu:22.04` Docker container. The bundle lands in `dist/samba-nice-webui-<version>-linux-x86_64.tar.gz`, using the exact git tag at `HEAD` (fallback: `pyproject.toml`); `pyproject.toml` and `uv.lock` are synced first.
 
 ## 🧪 Running Tests
 

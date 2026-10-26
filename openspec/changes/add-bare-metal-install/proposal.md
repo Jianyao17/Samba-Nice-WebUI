@@ -11,7 +11,7 @@ The application is currently distributed only as a Docker image and Docker Compo
   - no Python, pip, uv, or compiler required on the target;
   - fixed runtime layout under `/opt/samba-nice-webui`;
   - published per release with a SHA256 checksum.
-- Add `scripts/install.sh`:
+- Add `scripts/setup.sh`:
   - supports Debian 12/13 and Ubuntu 22.04/24.04 (apt) and refuses unsupported hosts with a clear message;
   - downloads and verifies the x86_64 release bundle;
   - installs under `/opt/samba-nice-webui`, leaving the application read-only at runtime;
@@ -46,7 +46,7 @@ None.
 
 ## Impact
 
-- New: `scripts/install.sh`, release build workflow or script, installer test fixtures, and possibly a packaging entrypoint.
+- New: `scripts/setup.sh`, release build workflow or script, installer test fixtures, and possibly a packaging entrypoint.
 - Changed: `src/main.py` (extract `main()`), `pyproject.toml` (`[project.scripts]`), `.github/workflows/ci.yml` or a new release workflow, `README.md`, `.env.example`, and `AGENTS.md`.
 - No changes to Samba parsing, share planning, backup semantics, storage boundaries, authentication, or the Docker image.
 - New runtime contract: `samba-nice-webui.service`, `/opt/samba-nice-webui`, `/etc/samba-nice-webui/webui.env`, `/etc/samba/smb.webui.conf`, `/etc/samba/.backups`, and configurable storage roots with `/mnt` as the default.

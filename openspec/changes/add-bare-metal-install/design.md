@@ -11,7 +11,7 @@ The missing pieces are distribution and host integration: a release artifact tha
 **Goals:**
 
 - Ship a reproducible x86_64 Linux bundle containing a portable Python runtime, dependencies, and the application.
-- Install, update, and remove the application through one `install.sh` command with no Python, pip, uv, or compiler on the target.
+- Install, update, and remove the application through one `setup.sh` command with no Python, pip, uv, or compiler on the target.
 - Run the application as a hardened root systemd service with a narrow write scope.
 - Make the optional `smb.conf` include edit safe, idempotent, and reversible.
 - Keep all existing Samba parsing, share, backup, storage, and authentication behavior unchanged.
@@ -50,7 +50,7 @@ Release assets:
 
 ```text
 samba-nice-webui-<version>-linux-x86_64.tar.gz
-samba-nice-webui-install.sh
+samba-nice-webui-setup.sh
 SHA256SUMS
 ```
 
@@ -80,7 +80,7 @@ The existing `if __name__ in {"__main__", "__mp_main__"}` guard keeps `python -m
 
 ### D4: Installer structure
 
-`scripts/install.sh` is a single self-contained Bash script so `curl ... | sudo bash` works without sibling files. It is also sourceable for tests: it defines functions and only calls `main "$@"` when executed directly.
+`scripts/setup.sh` is a single self-contained Bash script so `curl ... | sudo bash` works without sibling files. It is also sourceable for tests: it defines functions and only calls `main "$@"` when executed directly.
 
 Structure:
 
@@ -131,7 +131,8 @@ Password handling:
 Storage-root validation:
 
 - Each value must be an absolute path that resolves inside the target filesystem.
-- `/` and any path equal to or below `/etc/samba` are rejected.
+- Any path equal to or below `/etc/samba` is rejected.
+- `/` is accepted as a root; it grants the service write access to the whole filesystem through `ReadWritePaths=/`.
 - Duplicates are collapsed, order is preserved, and missing directories are created with mode `0755`.
 - The drop-in and the environment file receive exactly the validated list.
 
@@ -239,7 +240,7 @@ Algorithm:
 
 `--purge` uses the reverse operation: back up, remove only the managed include line, validate, restore on failure, and reload when possible.
 
-The insertion and removal helpers are functions inside `scripts/install.sh` so they can be sourced by shell tests without duplicating logic.
+The insertion and removal helpers are functions inside `scripts/setup.sh` so they can be sourced by shell tests without duplicating logic.
 
 ### D8: Update, rollback, and uninstall
 
@@ -254,7 +255,7 @@ The insertion and removal helpers are functions inside `scripts/install.sh` so t
 
 ### D9: Validation and CI
 
-- `shellcheck` and `bash -n` for `scripts/install.sh`.
+- `shellcheck` and `bash -n` for `scripts/setup.sh`.
 - Source-level shell tests for include insertion, idempotency, missing `[global]`, removal, and backup behavior, using fixture `smb.conf` files.
 - Source-level shell tests for prompt handling: defaults, custom answers, flag-supplied values, no `/dev/tty`, and invalid storage roots.
 - `systemd-analyze verify packaging/samba-nice-webui.service`, plus a check that a generated drop-in with two roots produces both paths in `systemctl show -p ReadWritePaths samba-nice-webui`.

@@ -79,7 +79,7 @@ On first install, when a terminal is available and `--non-interactive` is not se
 
 #### Scenario: Invalid storage root
 
-- **WHEN** an entered or supplied storage root is not an absolute path, is `/`, or overlaps `/etc/samba`
+- **WHEN** an entered or supplied storage root is not an absolute path or overlaps `/etc/samba`
 - **THEN** the installer rejects it with a clear message before writing any configuration
 
 ### Requirement: Generated configuration
