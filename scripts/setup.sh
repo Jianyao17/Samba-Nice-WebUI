@@ -30,6 +30,7 @@ PID_FILE="${SAMBA_PID_FILE:-/run/samba/smbd.pid}"
 SERVICE_PORT="8080"
 
 TMP_DIR=""
+SHOW_INSTALL_CREDENTIALS=0
 cleanup() {
     if [[ -n "${TMP_DIR:-}" && -d "${TMP_DIR:-}" ]]; then
         rm -rf "$TMP_DIR"
@@ -215,15 +216,15 @@ resolve_and_download() {
 
     if [[ -z "$INSTALL_VERSION" ]]; then
         echo "Resolving latest release tag from GitHub..."
-        local api_response
-        api_response="$(curl -fsSL "$API_URL/latest" 2>/dev/null || true)"
-        if [[ -z "$api_response" ]]; then
-            echo "Error: Failed to resolve latest release from GitHub API. Specify --version <tag> directly." >&2
-            exit 1
-        fi
-        INSTALL_VERSION="$(echo "$api_response" | grep -m1 '"tag_name":' | cut -d '"' -f4)"
+        local api_response=""
+        # Do not use -f so GitHub's error body (e.g. rate limit) is preserved.
+        api_response="$(curl -sSL "$API_URL/latest" 2>/dev/null || true)"
+        INSTALL_VERSION="$(echo "$api_response" | grep -m1 '"tag_name":' | cut -d '"' -f4 || true)"
         if [[ -z "$INSTALL_VERSION" ]]; then
-            echo "Error: Could not extract tag_name from release API response." >&2
+            echo "Error: Failed to resolve latest release from GitHub API. Specify --version <tag> directly." >&2
+            if [[ -n "$api_response" ]]; then
+                echo "$api_response" >&2
+            fi
             exit 1
         fi
     fi
@@ -235,7 +236,8 @@ resolve_and_download() {
     local sums_url="${BASE_URL}/download/${INSTALL_VERSION}/SHA256SUMS"
 
     echo "Downloading release bundle ${INSTALL_VERSION}..."
-    if ! curl -fsSL -o "${TMP_DIR}/${bundle_name}" "$bundle_url"; then
+    # Drop -s so curl can render a progress bar; keep -fL for fail/redirects.
+    if ! curl -fL --progress-bar -o "${TMP_DIR}/${bundle_name}" "$bundle_url"; then
         echo "Error: Failed to download release bundle from $bundle_url" >&2
         exit 1
     fi
@@ -266,10 +268,66 @@ resolve_and_download() {
     DOWNLOADED_ARCHIVE="${TMP_DIR}/${bundle_name}"
 }
 
+read_env_file_value() {
+    # Read KEY=value from an env file; prints the value or nothing.
+    local key="$1"
+    local file="${2:-$ENV_FILE}"
+    local line=""
+
+    [[ -f "$file" ]] || return 0
+    line="$(grep -E "^${key}=" "$file" 2>/dev/null | head -n1 || true)"
+    [[ -n "$line" ]] || return 0
+    printf '%s' "${line#*=}"
+}
+
+update_env_file_key() {
+    # Replace or append KEY=value in an env file without interpreting the value.
+    local key="$1"
+    local value="$2"
+    local file="$3"
+    local tmp
+
+    tmp="$(mktemp)"
+    awk -v key="$key" -v val="$value" '
+        BEGIN { found = 0 }
+        index($0, key "=") == 1 {
+            print key "=" val
+            found = 1
+            next
+        }
+        { print }
+        END {
+            if (!found) print key "=" val
+        }
+    ' "$file" > "$tmp"
+    mv "$tmp" "$file"
+    chmod 0600 "$file"
+}
+
 prompt_credentials_and_roots() {
-    # If not a fresh install, skip first-run prompts
-    if [[ -f "$ENV_FILE" || "$DRY_RUN" -eq 1 || "$UNINSTALL" -eq 1 ]]; then
+    if [[ "$DRY_RUN" -eq 1 || "$UNINSTALL" -eq 1 ]]; then
         return 0
+    fi
+
+    # Prefer existing webui.env values as defaults (reinstall after uninstall keeps this file).
+    local existing_user=""
+    local existing_password=""
+    local existing_roots=""
+    if [[ -f "$ENV_FILE" ]]; then
+        existing_user="$(read_env_file_value WEBUI_ADMIN_USER)"
+        existing_password="$(read_env_file_value WEBUI_ADMIN_PASSWORD)"
+        existing_roots="$(read_env_file_value ALLOWED_STORAGE_ROOTS)"
+    fi
+
+    local default_user="${existing_user:-admin}"
+    local default_roots="${existing_roots:-/mnt}"
+
+    # Prompt on first install or reinstall after uninstall (app dir removed, env may remain).
+    # Skip prompts on in-place updates where both env and install dir already exist.
+    local should_prompt=0
+    if [[ ! -f "$ENV_FILE" || ! -d "$INSTALL_DIR" ]]; then
+        should_prompt=1
+        SHOW_INSTALL_CREDENTIALS=1
     fi
 
     # Check if a controlling terminal is available
@@ -280,22 +338,28 @@ prompt_credentials_and_roots() {
         has_tty=1
     fi
 
-    if [[ "$NON_INTERACTIVE" -eq 1 || "$has_tty" -eq 0 ]]; then
-        # Non-interactive fallback
-        ADMIN_USER="${ADMIN_USER:-admin}"
+    if [[ "$should_prompt" -eq 0 || "$NON_INTERACTIVE" -eq 1 || "$has_tty" -eq 0 ]]; then
+        # Flags win; otherwise reuse env values, then hard-coded defaults.
+        ADMIN_USER="${ADMIN_USER:-$default_user}"
         if [[ -z "$ADMIN_PASSWORD" ]]; then
-            ADMIN_PASSWORD="${SAMBA_NICE_ADMIN_PASSWORD:-$(openssl rand -hex 12)}"
+            if [[ -n "${SAMBA_NICE_ADMIN_PASSWORD:-}" ]]; then
+                ADMIN_PASSWORD="$SAMBA_NICE_ADMIN_PASSWORD"
+            elif [[ -n "$existing_password" ]]; then
+                ADMIN_PASSWORD="$existing_password"
+            else
+                ADMIN_PASSWORD="$(openssl rand -hex 12)"
+            fi
         fi
-        ALLOWED_ROOTS="${ALLOWED_ROOTS:-/mnt}"
+        ALLOWED_ROOTS="${ALLOWED_ROOTS:-$default_roots}"
         return 0
     fi
 
     # 1. Admin username
     if [[ -z "$ADMIN_USER" ]]; then
-        printf "Admin username [admin]: " > /dev/tty
+        printf "Admin username [%s]: " "$default_user" > /dev/tty
         local user_in=""
         read -r user_in < /dev/tty || user_in=""
-        ADMIN_USER="${user_in:-admin}"
+        ADMIN_USER="${user_in:-$default_user}"
     fi
 
     # 2. Admin password
@@ -303,12 +367,20 @@ prompt_credentials_and_roots() {
         if [[ -n "${SAMBA_NICE_ADMIN_PASSWORD:-}" ]]; then
             ADMIN_PASSWORD="$SAMBA_NICE_ADMIN_PASSWORD"
         else
-            printf "Admin password [leave blank to generate]: " > /dev/tty
+            if [[ -n "$existing_password" ]]; then
+                printf "Admin password [leave blank to keep existing]: " > /dev/tty
+            else
+                printf "Admin password [leave blank to generate]: " > /dev/tty
+            fi
             local pass_in=""
             read -rs pass_in < /dev/tty || pass_in=""
             echo "" > /dev/tty
             if [[ -z "$pass_in" ]]; then
-                ADMIN_PASSWORD="$(openssl rand -hex 12)"
+                if [[ -n "$existing_password" ]]; then
+                    ADMIN_PASSWORD="$existing_password"
+                else
+                    ADMIN_PASSWORD="$(openssl rand -hex 12)"
+                fi
             else
                 ADMIN_PASSWORD="$pass_in"
             fi
@@ -317,10 +389,10 @@ prompt_credentials_and_roots() {
 
     # 3. Allowed storage roots
     if [[ -z "$ALLOWED_ROOTS" ]]; then
-        printf "Allowed storage roots [default: /mnt]: " > /dev/tty
+        printf "Allowed storage roots [%s]: " "$default_roots" > /dev/tty
         local roots_in=""
         read -r roots_in < /dev/tty || roots_in=""
-        ALLOWED_ROOTS="${roots_in:-/mnt}"
+        ALLOWED_ROOTS="${roots_in:-$default_roots}"
     fi
 }
 
@@ -398,17 +470,44 @@ setup_env_file() {
     run mkdir -p "$ENV_DIR"
 
     if [[ -f "$ENV_FILE" ]]; then
-        if [[ -n "${ALLOWED_ROOTS:-}" ]]; then
-            echo "Updating ALLOWED_STORAGE_ROOTS in existing environment file..."
-            local bak_file
-            bak_file="${ENV_FILE}.bak.$(date -u +%Y%m%d%H%M%S)"
-            run cp -a "$ENV_FILE" "$bak_file"
-            if [[ "$DRY_RUN" -eq 0 ]]; then
-                sed -i -E "s|^ALLOWED_STORAGE_ROOTS=.*|ALLOWED_STORAGE_ROOTS=${VALIDATED_ROOTS_CSV}|" "$ENV_FILE"
-            else
-                echo "[dry-run] sed -i -E 's|^ALLOWED_STORAGE_ROOTS=.*|ALLOWED_STORAGE_ROOTS=${VALIDATED_ROOTS_CSV}|' $ENV_FILE"
-            fi
+        local current_user current_password current_roots
+        current_user="$(read_env_file_value WEBUI_ADMIN_USER)"
+        current_password="$(read_env_file_value WEBUI_ADMIN_PASSWORD)"
+        current_roots="$(read_env_file_value ALLOWED_STORAGE_ROOTS)"
+
+        local update_user=0
+        local update_password=0
+        local update_roots=0
+
+        if [[ -n "${ADMIN_USER:-}" && "$ADMIN_USER" != "$current_user" ]]; then
+            update_user=1
         fi
+        if [[ -n "${ADMIN_PASSWORD:-}" && "$ADMIN_PASSWORD" != "$current_password" ]]; then
+            update_password=1
+        fi
+        if [[ -n "${ALLOWED_ROOTS:-}" && "${VALIDATED_ROOTS_CSV:-}" != "$current_roots" ]]; then
+            update_roots=1
+        fi
+
+        if [[ "$update_user" -eq 0 && "$update_password" -eq 0 && "$update_roots" -eq 0 ]]; then
+            return 0
+        fi
+
+        echo "Updating existing environment file..."
+        local bak_file
+        bak_file="${ENV_FILE}.bak.$(date -u +%Y%m%d%H%M%S)"
+        run cp -a "$ENV_FILE" "$bak_file"
+
+        if [[ "$DRY_RUN" -eq 1 ]]; then
+            [[ "$update_user" -eq 1 ]] && echo "[dry-run] set WEBUI_ADMIN_USER=${ADMIN_USER}"
+            [[ "$update_password" -eq 1 ]] && echo "[dry-run] set WEBUI_ADMIN_PASSWORD=<redacted>"
+            [[ "$update_roots" -eq 1 ]] && echo "[dry-run] set ALLOWED_STORAGE_ROOTS=${VALIDATED_ROOTS_CSV}"
+            return 0
+        fi
+
+        [[ "$update_user" -eq 1 ]] && update_env_file_key WEBUI_ADMIN_USER "$ADMIN_USER" "$ENV_FILE"
+        [[ "$update_password" -eq 1 ]] && update_env_file_key WEBUI_ADMIN_PASSWORD "$ADMIN_PASSWORD" "$ENV_FILE"
+        [[ "$update_roots" -eq 1 ]] && update_env_file_key ALLOWED_STORAGE_ROOTS "$VALIDATED_ROOTS_CSV" "$ENV_FILE"
         return 0
     fi
 
@@ -676,13 +775,19 @@ main() {
     echo "Samba-Nice-WebUI installed successfully!"
     echo "====================================================="
     echo "Access URL:      http://<server-ip>:${SERVICE_PORT} (or http://localhost:${SERVICE_PORT})"
-    echo "Admin Username:  ${ADMIN_USER}"
-    echo "Admin Password:  ${ADMIN_PASSWORD}"
+    if [[ "$SHOW_INSTALL_CREDENTIALS" -eq 1 ]]; then
+        echo "Admin Username:  ${ADMIN_USER}"
+        echo "Admin Password:  ${ADMIN_PASSWORD}"
+    else
+        echo "Admin credentials: unchanged (see ${ENV_FILE})"
+    fi
     echo "Storage Roots:   ${VALIDATED_ROOTS_CSV}"
     echo "====================================================="
 }
 
-# Only run main if executed directly
-if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+# Run main when executed as a file or piped to bash; skip when sourced.
+# Under `set -u`, bare BASH_SOURCE[0] fails when the script is fed via stdin
+# (curl | bash) because the array entry is unset.
+if [[ -z "${BASH_SOURCE[0]:-}" || "${BASH_SOURCE[0]}" == "${0}" ]]; then
     main "$@"
 fi

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+import re
 import shutil
 import subprocess
 import tempfile
@@ -11,28 +12,106 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 INSTALL_SCRIPT = REPO_ROOT / "scripts" / "setup.sh"
 
 
-def get_working_bash() -> str | None:
+def _bash_candidates() -> list[str]:
     """
-    Find a working bash executable or return None.
+    Ordered bash candidates to check on this host.
     """
-    candidate = shutil.which("bash")
-    if candidate:
+    candidates: list[str] = []
+    if os.name == "nt":
+        for path in (
+            r"C:\Windows\system32\bash.exe",
+            r"C:\Program Files\Git\bin\bash.exe",
+            r"C:\Program Files\Git\usr\bin\bash.exe",
+        ):
+            if Path(path).is_file():
+                candidates.append(path)
+
+    which_bash = shutil.which("bash")
+    if which_bash:
+        candidates.append(which_bash)
+
+    unique: list[str] = []
+    seen: set[str] = set()
+    for candidate in candidates:
+        key = os.path.normcase(os.path.abspath(candidate))
+        if key not in seen:
+            seen.add(key)
+            unique.append(candidate)
+    return unique
+
+
+def _detect_bash() -> tuple[str | None, bool]:
+    """
+    Find a functional bash executable and detect whether it runs under WSL.
+    Verifies that the shell can actually fork processes and subshells.
+    """
+    for candidate in _bash_candidates():
         try:
             res = subprocess.run(
-                [candidate, "-c", "echo ok"],
+                [candidate, "-c", "(echo ok)"],
                 capture_output=True,
                 text=True,
                 timeout=3,
             )
-            if res.returncode == 0 and res.stdout.strip() == "ok":
-                return candidate
+            if res.returncode != 0 or res.stdout.strip() != "ok":
+                continue
+
+            is_wsl = False
+            uname_res = subprocess.run(
+                [candidate, "-c", "uname -r"],
+                capture_output=True,
+                text=True,
+                timeout=3,
+            )
+            if uname_res.returncode == 0:
+                kernel = uname_res.stdout.lower()
+                if "microsoft" in kernel or "wsl" in kernel:
+                    is_wsl = True
+
+            return candidate, is_wsl
         except Exception:
-            pass
+            continue
 
-    return None
+    return None, False
 
 
-BASH_BIN = get_working_bash()
+BASH_BIN, IS_WSL = _detect_bash()
+
+
+def to_bash_path(path: Path | str) -> str:
+    """
+    Format a path for the detected bash environment.
+    """
+    path_obj = Path(path).resolve()
+    posix = path_obj.as_posix()
+    if IS_WSL and len(posix) >= 2 and posix[1] == ":":
+        drive = posix[0].lower()
+        return f"/mnt/{drive}{posix[2:]}"
+    return posix
+
+
+def to_wsl_path(text: str) -> str:
+    """
+    Translate Windows drive paths (C:/... or C:\\...) to WSL paths (/mnt/c/...).
+    """
+    def repl(m: re.Match[str]) -> str:
+        drive = m.group(1).lower()
+        rest = m.group(2).replace("\\", "/")
+        return f"/mnt/{drive}/{rest}"
+
+    return re.sub(r"([A-Za-z]):[/\\]([^\s\"'>;&|,]+)", repl, text)
+
+
+def from_wsl_path(text: str) -> str:
+    """
+    Translate WSL paths (/mnt/c/...) back to Windows drive paths (C:/...).
+    """
+    def repl(m: re.Match[str]) -> str:
+        drive = m.group(1).upper()
+        rest = m.group(2)
+        return f"{drive}:/{rest}"
+
+    return re.sub(r"/mnt/([a-zA-Z])/([^\s\"'<;&|,]+)", repl, text)
 
 
 def run_bash_code(
@@ -46,20 +125,36 @@ def run_bash_code(
     if not BASH_BIN:
         pytest.skip("Bash is unavailable or non-functional on this host")
 
-    script_posix = INSTALL_SCRIPT.as_posix()
-    full_cmd = f'source "{script_posix}"\n{script_snippet}'
+    script_target = to_bash_path(INSTALL_SCRIPT)
+    full_cmd = f'source "{script_target}"\n{script_snippet}'
+    if IS_WSL:
+        full_cmd = to_wsl_path(full_cmd)
+
+    full_cmd_clean = full_cmd.replace("\r\n", "\n").replace("\r", "\n")
 
     proc_env = os.environ.copy()
     if env:
         proc_env.update(env)
 
-    return subprocess.run(
-        [BASH_BIN, "-c", full_cmd],
+    res = subprocess.run(
+        [BASH_BIN, "--norc", "--noprofile"],
+        input=full_cmd_clean.encode("utf-8"),
         capture_output=True,
-        text=True,
         env=proc_env,
         cwd=cwd or REPO_ROOT,
         timeout=30,
+    )
+    stdout = res.stdout.decode("utf-8", errors="replace")
+    stderr = res.stderr.decode("utf-8", errors="replace")
+    if IS_WSL:
+        stdout = from_wsl_path(stdout)
+        stderr = from_wsl_path(stderr)
+
+    return subprocess.CompletedProcess(
+        args=res.args,
+        returncode=res.returncode,
+        stdout=stdout,
+        stderr=stderr,
     )
 
 
@@ -80,8 +175,9 @@ def test_argument_parsing_help():
     if not BASH_BIN:
         pytest.skip("Bash is unavailable or non-functional on this host")
 
+    script_target = to_bash_path(INSTALL_SCRIPT)
     res = subprocess.run(
-        [BASH_BIN, str(INSTALL_SCRIPT), "--help"],
+        [BASH_BIN, script_target, "--help"],
         capture_output=True,
         text=True,
         timeout=10,
@@ -108,13 +204,15 @@ def test_argument_parsing_unknown_option():
     if not BASH_BIN:
         pytest.skip("Bash is unavailable or non-functional on this host")
 
+    script_target = to_bash_path(INSTALL_SCRIPT)
     res = subprocess.run(
-        [BASH_BIN, str(INSTALL_SCRIPT), "--unknown-flag"],
+        [BASH_BIN, script_target, "--unknown-flag"],
         capture_output=True,
         text=True,
         timeout=10,
     )
     assert res.returncode != 0
+    assert "Unknown argument: --unknown-flag" in res.stderr
     assert "Unknown argument: --unknown-flag" in res.stderr
 
 
@@ -442,6 +540,8 @@ def test_first_run_prompts_non_interactive_and_env():
     ADMIN_USER=""
     ADMIN_PASSWORD=""
     ALLOWED_ROOTS=""
+    ENV_FILE="/nonexistent/webui.env"
+    INSTALL_DIR="/nonexistent/opt/samba-nice-webui"
     prompt_credentials_and_roots
     echo "USER:$ADMIN_USER"
     echo "PASS_LEN:${#ADMIN_PASSWORD}"
@@ -453,6 +553,122 @@ def test_first_run_prompts_non_interactive_and_env():
     assert "ROOTS:/mnt" in res.stdout
     # Length of hex-generated password (12 bytes hex = 24 chars)
     assert "PASS_LEN:24" in res.stdout
+
+
+def test_reinstall_reuses_existing_env_defaults():
+    """
+    After uninstall (env kept, install dir gone), non-interactive install reuses webui.env.
+    """
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        tmp_path = Path(tmp_dir).as_posix()
+        env_dir = f"{tmp_path}/etc/samba-nice-webui"
+        env_file = f"{env_dir}/webui.env"
+        install_dir = f"{tmp_path}/opt/samba-nice-webui"
+        os.makedirs(env_dir, exist_ok=True)
+        Path(env_file).write_text(
+            "WEBUI_ADMIN_USER=keptadmin\n"
+            "WEBUI_ADMIN_PASSWORD=keptsecret\n"
+            "ALLOWED_STORAGE_ROOTS=/mnt/data,/mnt/media\n"
+        )
+
+        code = f"""
+        NON_INTERACTIVE=1
+        ADMIN_USER=""
+        ADMIN_PASSWORD=""
+        ALLOWED_ROOTS=""
+        ENV_FILE="{env_file}"
+        INSTALL_DIR="{install_dir}"
+        prompt_credentials_and_roots
+        echo "USER:$ADMIN_USER"
+        echo "PASS:$ADMIN_PASSWORD"
+        echo "ROOTS:$ALLOWED_ROOTS"
+        echo "SHOW:$SHOW_INSTALL_CREDENTIALS"
+        """
+        res = run_bash_code(code)
+        assert res.returncode == 0
+        assert "USER:keptadmin" in res.stdout
+        assert "PASS:keptsecret" in res.stdout
+        assert "ROOTS:/mnt/data,/mnt/media" in res.stdout
+        assert "SHOW:1" in res.stdout
+
+
+def test_inplace_update_skips_credential_banner_flag():
+    """
+    In-place update (env + install dir present) reuses env roots and does not mark credentials as new.
+    """
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        tmp_path = Path(tmp_dir).as_posix()
+        env_dir = f"{tmp_path}/etc/samba-nice-webui"
+        env_file = f"{env_dir}/webui.env"
+        install_dir = f"{tmp_path}/opt/samba-nice-webui"
+        os.makedirs(env_dir, exist_ok=True)
+        os.makedirs(install_dir, exist_ok=True)
+        Path(env_file).write_text(
+            "WEBUI_ADMIN_USER=admin\n"
+            "WEBUI_ADMIN_PASSWORD=secret\n"
+            "ALLOWED_STORAGE_ROOTS=/mnt/custom\n"
+        )
+
+        code = f"""
+        NON_INTERACTIVE=1
+        ADMIN_USER=""
+        ADMIN_PASSWORD=""
+        ALLOWED_ROOTS=""
+        ENV_FILE="{env_file}"
+        INSTALL_DIR="{install_dir}"
+        prompt_credentials_and_roots
+        echo "ROOTS:$ALLOWED_ROOTS"
+        echo "SHOW:$SHOW_INSTALL_CREDENTIALS"
+        """
+        res = run_bash_code(code)
+        assert res.returncode == 0
+        assert "ROOTS:/mnt/custom" in res.stdout
+        assert "SHOW:0" in res.stdout
+
+
+def test_setup_env_file_updates_credentials_when_changed():
+    """
+    Reinstall with new credentials updates only changed keys and keeps the secret.
+    """
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        tmp_path = Path(tmp_dir).as_posix()
+        env_dir = f"{tmp_path}/etc/samba-nice-webui"
+        env_file = f"{env_dir}/webui.env"
+        samba_dir = f"{tmp_path}/etc/samba"
+        os.makedirs(env_dir, exist_ok=True)
+
+        Path(env_file).write_text(
+            "WEBUI_HOST=0.0.0.0\n"
+            "WEBUI_PORT=8080\n"
+            "WEBUI_ADMIN_USER=oldadmin\n"
+            "WEBUI_ADMIN_PASSWORD=oldsecret\n"
+            "WEBUI_SECRET_KEY=keep-this-secret\n"
+            "WEBUI_AUTO_RELOAD=false\n"
+            f"SAMBA_INCLUDE_CONF_PATH={samba_dir}/smb.webui.conf\n"
+            f"SAMBA_BACKUP_DIR={samba_dir}/.backups\n"
+            "SAMBA_PID_FILE=/run/samba/smbd.pid\n"
+            "ALLOWED_STORAGE_ROOTS=/mnt\n"
+        )
+
+        code = f"""
+        ENV_DIR="{env_dir}"
+        ENV_FILE="{env_file}"
+        ADMIN_USER="newadmin"
+        ADMIN_PASSWORD="newsecret"
+        ALLOWED_ROOTS="/mnt/data"
+        VALIDATED_ROOTS_CSV="/mnt/data"
+        setup_env_file
+        cat "$ENV_FILE"
+        """
+        res = run_bash_code(code)
+        assert res.returncode == 0
+        content = Path(env_file).read_text()
+        assert "WEBUI_ADMIN_USER=newadmin" in content
+        assert "WEBUI_ADMIN_PASSWORD=newsecret" in content
+        assert "ALLOWED_STORAGE_ROOTS=/mnt/data" in content
+        assert "WEBUI_SECRET_KEY=keep-this-secret" in content
+        backups = list(Path(env_dir).glob("webui.env.bak.*"))
+        assert len(backups) == 1
 
 
 def test_uninstall_and_purge_file_preservation():
@@ -478,10 +694,11 @@ def test_uninstall_and_purge_file_preservation():
         os.makedirs(samba_dir, exist_ok=True)
         os.makedirs(backup_dir, exist_ok=True)
 
+        bash_smb_webui_conf = to_bash_path(smb_webui_conf)
         Path(env_file).write_text("WEBUI_HOST=0.0.0.0\n")
         Path(smb_webui_conf).write_text("[share]\npath=/mnt\n")
         Path(f"{systemd_dir}/samba-nice-webui.service").write_text("[Unit]\n")
-        Path(smb_conf).write_text(f"[global]\n   include = {smb_webui_conf}\n")
+        Path(smb_conf).write_text(f"[global]\n   include = {bash_smb_webui_conf}\n")
 
         # 1. Test standard uninstall (PURGE=0)
         code_uninstall = f"""
@@ -489,6 +706,7 @@ def test_uninstall_and_purge_file_preservation():
         ENV_DIR="{env_dir}"
         ENV_FILE="{env_file}"
         SYSTEMD_DIR="{systemd_dir}"
+        DROPIN_DIR="{systemd_dir}/samba-nice-webui.service.d"
         SAMBA_DIR="{samba_dir}"
         SMB_CONF="{smb_conf}"
         SMB_WEBUI_CONF="{smb_webui_conf}"
@@ -504,7 +722,7 @@ def test_uninstall_and_purge_file_preservation():
         assert Path(env_file).exists()
         assert Path(smb_webui_conf).exists()
         assert Path(backup_dir).exists()
-        assert f"include = {smb_webui_conf}" in Path(smb_conf).read_text()
+        assert f"include = {bash_smb_webui_conf}" in Path(smb_conf).read_text()
 
         # 2. Test purge (PURGE=1)
         code_purge = f"""
@@ -512,6 +730,7 @@ def test_uninstall_and_purge_file_preservation():
         ENV_DIR="{env_dir}"
         ENV_FILE="{env_file}"
         SYSTEMD_DIR="{systemd_dir}"
+        DROPIN_DIR="{systemd_dir}/samba-nice-webui.service.d"
         SAMBA_DIR="{samba_dir}"
         SMB_CONF="{smb_conf}"
         SMB_WEBUI_CONF="{smb_webui_conf}"
@@ -526,4 +745,4 @@ def test_uninstall_and_purge_file_preservation():
         assert not Path(env_dir).exists()
         assert not Path(smb_webui_conf).exists()
         assert not Path(backup_dir).exists()
-        assert f"include = {smb_webui_conf}" not in Path(smb_conf).read_text()
+        assert f"include = {bash_smb_webui_conf}" not in Path(smb_conf).read_text()
