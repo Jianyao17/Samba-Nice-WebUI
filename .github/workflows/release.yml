@@ -1,0 +1,135 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  tests:
+    name: Tests
+    uses: ./.github/workflows/ci.yml
+
+  image:
+    name: Build & push image
+    needs: [tests]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      # Nama image di GHCR harus huruf kecil
+      - name: Lowercase image name
+        run: echo "IMAGE_NAME=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_ENV"
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=semver,pattern={{version}}
+            type=sha
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  release:
+    name: GitHub Release
+    needs: [tests]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build release bundle
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          export VERSION
+          bash scripts/build-bundle.sh
+
+      - name: Prepare release assets
+        run: |
+          cd dist
+          sha256sum samba-nice-webui-*-linux-x86_64.tar.gz > SHA256SUMS
+          sha256sum -c SHA256SUMS
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/samba-nice-webui-*-linux-x86_64.tar.gz
+            dist/SHA256SUMS
+          generate_release_notes: true
+
+  pages:
+    name: Publish installer to GitHub Pages
+    # Publish after the release exists so the installer never points at missing assets.
+    needs: [release]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check published installer
+        id: check
+        run: |
+          url="https://${GITHUB_REPOSITORY_OWNER,,}.github.io/${GITHUB_REPOSITORY#*/}/setup.sh"
+          expected="$(sha256sum scripts/setup.sh | awk '{print $1}')"
+          actual="$(curl -fsSL "${url}?cachebust=$(date +%s)" 2>/dev/null | sha256sum | awk '{print $1}')"
+          if [[ "$actual" == "$expected" ]]; then
+            echo "Published installer already matches scripts/setup.sh; skipping Pages deploy."
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "Published installer differs from scripts/setup.sh; deploying to Pages."
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Stage installer
+        if: steps.check.outputs.changed == 'true'
+        run: |
+          mkdir -p _site
+          cp scripts/setup.sh _site/setup.sh
+
+      - if: steps.check.outputs.changed == 'true'
+        uses: actions/configure-pages@v5
+
+      - if: steps.check.outputs.changed == 'true'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - id: deployment
+        if: steps.check.outputs.changed == 'true'
+        uses: actions/deploy-pages@v4

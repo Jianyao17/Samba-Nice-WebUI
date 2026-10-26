@@ -53,7 +53,7 @@ samba-nice-webui-<version>-linux-x86_64.tar.gz
 SHA256SUMS
 ```
 
-The installer is not a release asset. The release job publishes `scripts/setup.sh` as `setup.sh` to GitHub Pages at `https://jianyao17.github.io/Samba-Nice-WebUI/setup.sh` after the archive and checksums exist, and the site contains only that file. Pages paths are case-sensitive, so the documented URL keeps the repository's exact casing. Pages may serve a cached copy for a few minutes after a release; the installer resolves the latest tag itself, so a cached copy still installs the newest release.
+The installer is not a release asset. The release job publishes `scripts/setup.sh` as `setup.sh` to GitHub Pages at `https://jianyao17.github.io/Samba-Nice-WebUI/setup.sh` after the archive and checksums exist, and the site contains only that file. The Pages job skips the deploy when the published copy already matches the tagged script. Pages paths are case-sensitive, so the documented URL keeps the repository's exact casing. Pages may serve a cached copy for a few minutes after a release; the installer resolves the latest tag itself, so a cached copy still installs the newest release.
 
 Archive layout:
 
