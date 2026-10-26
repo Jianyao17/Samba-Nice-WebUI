@@ -45,7 +45,11 @@ backend = LinuxHostSambaBackend(
     pid_file=settings.samba_pid_file,
     backup_manager=backup_manager,
 )
-dir_manager = StorageDirectoryManager(settings.parsed_storage_roots, backend=backend)
+
+dir_manager = StorageDirectoryManager(
+    settings.parsed_storage_roots, 
+    backend=backend
+)
 
 
 # 3. Register application page routes
@@ -75,12 +79,20 @@ def backups_route():
 
 
 # 4. Main execution entry point
-if __name__ in {"__main__", "__mp_main__"}:
+def main() -> None:
+    """
+    Start the NiceGUI web server.
+    """
     ui.run(
         host=settings.webui_host,
         port=settings.webui_port,
         title="Samba-Nice-WebUI",
         storage_secret=settings.webui_secret_key,
         reload=settings.webui_auto_reload,
-        show=False
+        show=False,
     )
+
+
+if __name__ in {"__main__", "__mp_main__"}:
+    main()
+

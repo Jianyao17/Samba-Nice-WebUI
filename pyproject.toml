@@ -10,6 +10,9 @@ dependencies = [
     "pydantic-settings>=2.2.0",
 ]
 
+[project.scripts]
+samba-nice-webui = "src.main:main"
+
 [project.optional-dependencies]
 dev = [
     "pytest>=8.0.0",
