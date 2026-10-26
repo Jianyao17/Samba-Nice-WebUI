@@ -22,9 +22,10 @@ The application is currently distributed only as a Docker image and Docker Compo
   - optionally adds `include = /etc/samba/smb.webui.conf` as the last line of `[global]` in `/etc/samba/smb.conf`, after backing up the file, validating with `testparm`, and rolling back on failure;
   - supports `--version`, `--admin-user`, `--admin-password`, `--allowed-roots`, `--non-interactive`, `--no-samba-config`, `--uninstall`, `--dry-run`, and non-interactive operation when no terminal is available;
   - prints the access URL and the effective credentials once at the end.
+- Serve `scripts/setup.sh` from GitHub Pages at `https://jianyao17.github.io/Samba-Nice-WebUI/setup.sh` and stop uploading it as a release asset, so the documented install command stays short.
 - Add a console entrypoint (`samba-nice-webui = "src.main:main"`) and extract `main()` from the `__main__` guard so systemd starts the app through the package entrypoint.
 - Keep the managed include file and backup history in `/etc/samba`. Temporary files remain next to the include file, preserving atomic replacement and SELinux labeling.
-- Add release and validation automation: shellcheck, `systemd-analyze verify`, a bundle smoke test, release asset upload, and checksums.
+- Add release and validation automation: shellcheck, `systemd-analyze verify`, a bundle smoke test, release asset upload, Pages deployment, and checksums.
 - Update README, `.env.example`, and AGENTS.md with bare-metal install, update, uninstall, security, and troubleshooting notes.
 - Docker remains supported and unchanged as the recommended isolated deployment.
 

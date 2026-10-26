@@ -35,13 +35,15 @@ Samba-Nice-WebUI lets you create, edit, and organize Samba shares from a clean b
 The setup script downloads a self-contained bundle (portable Python 3.12 plus locked dependencies), installs it under `/opt/samba-nice-webui`, creates a hardened systemd service, and optionally adds the managed include line to `/etc/samba/smb.conf`. The host needs no Python, pip, uv, or compiler.
 
 ```bash
-curl -fsSL https://github.com/Jianyao17/Samba-Nice-WebUI/releases/latest/download/samba-nice-webui-setup.sh | sudo bash
+curl -fsSL https://jianyao17.github.io/Samba-Nice-WebUI/setup.sh | sudo bash
 ```
+
+The installer is served from GitHub Pages, so the URL path is case-sensitive. It resolves the latest release itself, which makes the same command work for install, update, and rollback (`--version <tag>`).
 
 On first install it asks three questions: admin username (`admin`), admin password (blank generates one), and allowed storage roots (`/mnt`). For unattended installs:
 
 ```bash
-curl -fsSL https://github.com/Jianyao17/Samba-Nice-WebUI/releases/latest/download/samba-nice-webui-setup.sh \
+curl -fsSL https://jianyao17.github.io/Samba-Nice-WebUI/setup.sh \
   | sudo bash -s -- \
       --non-interactive \
       --admin-user admin \
@@ -165,6 +167,10 @@ bash scripts/tests/test-bundle.sh
 ```
 
 Both commands run in an `ubuntu:22.04` Docker container. The bundle lands in `dist/samba-nice-webui-<version>-linux-x86_64.tar.gz`, using the exact git tag at `HEAD` (fallback: `pyproject.toml`); `pyproject.toml` and `uv.lock` are synced first.
+
+### Publishing a Release
+
+Push a `v*` tag. CI tests the change, builds the bundle, creates the GitHub Release with exactly two assets (`samba-nice-webui-<version>-linux-x86_64.tar.gz` and `SHA256SUMS`), and then publishes `scripts/setup.sh` as `setup.sh` to GitHub Pages. The installer itself is never a release asset; it always resolves the latest release, so the public URL does not change between versions. Download both assets and run `sha256sum -c SHA256SUMS` to verify the archive before installing.
 
 ## 🧪 Running Tests
 

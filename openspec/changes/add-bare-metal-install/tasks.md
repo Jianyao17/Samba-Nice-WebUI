@@ -31,8 +31,8 @@
 ## 4. Release automation
 
 - [x] 4.1 Add installer and unit checks to `.github/workflows/ci.yml`: `bash -n`, `shellcheck`, `systemd-analyze verify` in an `ubuntu:22.04` container, and `uv run pytest tests/shell -v`, wired into the existing trigger paths for `scripts/**`, `packaging/**`, and `tests/**`; verify a pull request run reports these steps green.
-- [x] 4.2 Add a release job that, on `v*` tags and after the existing test jobs, builds the bundle, generates `SHA256SUMS`, copies `scripts/setup.sh` to `samba-nice-webui-setup.sh`, and uploads the archive, installer, and checksums to the GitHub release while keeping the existing GHCR image publish; verify with a throwaway `v0.0.0-test` tag that the draft release lists all three assets and `sha256sum -c SHA256SUMS` passes for the downloaded archive.
-- [x] 4.3 Document the release procedure in `AGENTS.md` and `README.md` (tag format, asset names, checksum verification, installer URL); verify the documented `curl` install command resolves to the assets produced by the release job.
+- [x] 4.2 Add a release job that, on `v*` tags and after the existing test jobs, builds the bundle, generates a `SHA256SUMS` covering only the archive, uploads the archive and checksums to the GitHub release, then publishes `scripts/setup.sh` as `setup.sh` to GitHub Pages with the Pages source set to GitHub Actions, while keeping the existing GHCR image publish; verify with a throwaway `v0.0.0-test` tag that the release lists exactly two assets, `sha256sum -c SHA256SUMS` passes for the downloaded archive, and `curl -fsSL https://jianyao17.github.io/Samba-Nice-WebUI/setup.sh | head -1` returns the shebang.
+- [x] 4.3 Document the release procedure in `AGENTS.md` and `README.md` (tag format, asset names, checksum verification, the case-sensitive Pages installer URL); verify the documented `curl` install command downloads the Pages-hosted installer and that installer resolves the release assets produced by the release job.
 
 ## 5. End-to-end verification
 

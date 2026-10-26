@@ -196,3 +196,22 @@ The installer SHALL support non-interactive execution and SHALL accept `--versio
 
 - **WHEN** the requested release version does not exist
 - **THEN** the installer exits non-zero before stopping the service or modifying files
+
+### Requirement: Hosted installer
+
+The installer SHALL be served from `https://jianyao17.github.io/Samba-Nice-WebUI/setup.sh`, published from the tagged `scripts/setup.sh` during a `v*` release only after the bundle and `SHA256SUMS` exist. The GitHub Release SHALL contain only the versioned bundle and `SHA256SUMS`; no installer file SHALL be uploaded as a release asset. The URL SHALL keep the repository casing, because GitHub Pages paths are case-sensitive.
+
+#### Scenario: Install from the documented command
+
+- **WHEN** an administrator runs `curl -fsSL https://jianyao17.github.io/Samba-Nice-WebUI/setup.sh | sudo bash` on a supported host
+- **THEN** Pages returns the installer and it installs the latest release
+
+#### Scenario: Release publishes the installer to Pages
+
+- **WHEN** a `v*` tag release completes
+- **THEN** the release lists only the versioned bundle and `SHA256SUMS` as assets, and the Pages URL serves the installer from that tag
+
+#### Scenario: A cached installer still installs the newest release
+
+- **WHEN** Pages serves a previously cached copy of the installer after a newer release exists
+- **THEN** that copy resolves and installs the latest release, so the documented URL never needs to change
