@@ -1,0 +1,96 @@
+name: Deploy Pages Installer
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "scripts/setup.sh"
+      - ".github/workflows/pages.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  test:
+    name: Validate installer
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Syntax check
+        run: bash -n scripts/setup.sh
+
+      - name: Run shellcheck
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq shellcheck
+          shellcheck scripts/setup.sh
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          version: "0.5.26"
+
+      - name: Run shell tests
+        run: |
+          uv sync --locked --extra dev
+          uv run pytest tests/shell -v
+
+  deploy:
+    name: Publish installer to GitHub Pages
+    needs: [test]
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify release asset availability
+        run: |
+          api_url="https://api.github.com/repos/${GITHUB_REPOSITORY}/releases/latest"
+          api_res="$(curl -sSL "$api_url" 2>/dev/null || true)"
+          tag="$(echo "$api_res" | grep -m1 '"tag_name":' | cut -d '"' -f4 || true)"
+          if [[ -z "$tag" ]]; then
+            echo "Error: No published GitHub Release found. Installer requires at least one release." >&2
+            exit 1
+          fi
+          echo "Verified latest release asset: $tag"
+
+      - name: Check published installer
+        id: check
+        run: |
+          url="https://${GITHUB_REPOSITORY_OWNER,,}.github.io/${GITHUB_REPOSITORY#*/}/setup.sh"
+          expected="$(sha256sum scripts/setup.sh | awk '{print $1}')"
+          actual="$(curl -fsSL "${url}?cachebust=$(date +%s)" 2>/dev/null | sha256sum | awk '{print $1}')"
+          if [[ "$actual" == "$expected" ]]; then
+            echo "Published installer already matches scripts/setup.sh; skipping Pages deploy."
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "Published installer differs from scripts/setup.sh; deploying to Pages."
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Stage installer
+        if: steps.check.outputs.changed == 'true'
+        run: |
+          mkdir -p _site
+          cp scripts/setup.sh _site/setup.sh
+
+      - if: steps.check.outputs.changed == 'true'
+        uses: actions/configure-pages@v5
+
+      - if: steps.check.outputs.changed == 'true'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - id: deployment
+        if: steps.check.outputs.changed == 'true'
+        uses: actions/deploy-pages@v4
