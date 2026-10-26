@@ -8,6 +8,7 @@ on:
       - "src/**"
       - "tests/**"
       - "scripts/**"
+      - "packaging/**"
       - "Dockerfile"
       - "Dockerfile.test"
       - "docker-compose*.yml"
@@ -19,6 +20,7 @@ on:
       - "src/**"
       - "tests/**"
       - "scripts/**"
+      - "packaging/**"
       - "Dockerfile"
       - "Dockerfile.test"
       - "docker-compose*.yml"
@@ -58,11 +60,42 @@ jobs:
       - name: Run integration tests against real smbd
         run: docker run --rm samba-nice-test
 
+  installer-checks:
+    name: Installer & service unit checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Syntax check (bash -n)
+        run: |
+          bash -n scripts/setup.sh
+          bash -n scripts/build-bundle.sh
+          bash -n scripts/tests/test-bundle.sh
+
+      - name: Run shellcheck
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq shellcheck
+          shellcheck scripts/setup.sh scripts/build-bundle.sh scripts/tests/test-bundle.sh
+
+      - name: Verify systemd service unit
+        run: |
+          docker run --rm -v "${PWD}:/repo" -w /repo ubuntu:22.04 bash -c "apt-get update -qq && apt-get install -y -qq systemd >/dev/null && mkdir -p /opt/samba-nice-webui/venv/bin && touch /opt/samba-nice-webui/venv/bin/samba-nice-webui && chmod +x /opt/samba-nice-webui/venv/bin/samba-nice-webui && mkdir -p /etc/samba-nice-webui && touch /etc/samba-nice-webui/webui.env && systemd-analyze verify packaging/samba-nice-webui.service"
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          version: "0.5.26"
+
+      - name: Run shell tests
+        run: |
+          uv sync --locked --extra dev
+          uv run pytest tests/shell -v
+
   publish:
     name: Build & push image
-    # 1. Publish only after all tests pass for a version tag push.
+    # Publish only after all tests pass for a version tag push.
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [unit, samba-integration]
+    needs: [unit, samba-integration, installer-checks]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -70,7 +103,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # 2. Nama image di GHCR harus huruf kecil
+      # Nama image di GHCR harus huruf kecil
       - name: Lowercase image name
         run: echo "IMAGE_NAME=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_ENV"
 
@@ -101,3 +134,35 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+  release:
+    name: GitHub Release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [unit, samba-integration, installer-checks]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build release bundle
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          export VERSION
+          bash scripts/build-bundle.sh
+
+      - name: Prepare release assets
+        run: |
+          cp scripts/setup.sh dist/samba-nice-webui-setup.sh
+          cd dist
+          sha256sum samba-nice-webui-*-linux-x86_64.tar.gz samba-nice-webui-setup.sh > SHA256SUMS
+          sha256sum -c SHA256SUMS
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/samba-nice-webui-*-linux-x86_64.tar.gz
+            dist/samba-nice-webui-setup.sh
+            dist/SHA256SUMS
+          generate_release_notes: true

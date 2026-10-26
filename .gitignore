@@ -25,6 +25,11 @@ ENV/
 *.swp
 *.swo
 
+# Build distributions and release bundles
+dist/
+build/
+*.egg-info/
+
 # Docker and test runtime artifacts
 .backups/
 temp_samba/
