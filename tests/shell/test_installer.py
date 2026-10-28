@@ -40,6 +40,25 @@ def _bash_candidates() -> list[str]:
     return unique
 
 
+def _run_bash(command: list[str]) -> subprocess.CompletedProcess[str]:
+    """
+    Run a bash command without showing console windows or inheriting stdio.
+    """
+    creationflags = 0
+    if os.name == "nt":
+        creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+
+    return subprocess.run(
+        command,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+        text=True,
+        timeout=3,
+        creationflags=creationflags,
+    )
+
+
 def _detect_bash() -> tuple[str | None, bool]:
     """
     Find a functional bash executable and detect whether it runs under WSL.
@@ -47,22 +66,12 @@ def _detect_bash() -> tuple[str | None, bool]:
     """
     for candidate in _bash_candidates():
         try:
-            res = subprocess.run(
-                [candidate, "-c", "(echo ok)"],
-                capture_output=True,
-                text=True,
-                timeout=3,
-            )
+            res = _run_bash([candidate, "-c", "(echo ok)"])
             if res.returncode != 0 or res.stdout.strip() != "ok":
                 continue
 
             is_wsl = False
-            uname_res = subprocess.run(
-                [candidate, "-c", "uname -r"],
-                capture_output=True,
-                text=True,
-                timeout=3,
-            )
+            uname_res = _run_bash([candidate, "-c", "uname -r"])
             if uname_res.returncode == 0:
                 kernel = uname_res.stdout.lower()
                 if "microsoft" in kernel or "wsl" in kernel:

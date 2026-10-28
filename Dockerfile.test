@@ -11,8 +11,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     samba \
     samba-common-bin \
     smbclient \
+    passwd \
     procps \
     && rm -rf /var/lib/apt/lists/*
+
+# Keep a copy of the image defaults so an empty /etc volume can be seeded
+RUN cp -a /etc /opt/etc-default
 
 # 2. Astral uv (versi sama dengan Dockerfile produksi)
 COPY --from=ghcr.io/astral-sh/uv:0.5.26 /uv /uvx /bin/
@@ -36,6 +40,10 @@ COPY packaging/ ./packaging/
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --locked --extra dev
 
-# 5. Jalankan seluruh test. Test Samba dijalankan sebagai root karena smbd butuh
-#    akses penuh untuk mapping guest; semua state Samba berada di /tmp.
+RUN chmod +x /app/scripts/docker-entrypoint.sh
+
+# 5. Jalankan seluruh test secara default. Set PYTEST_ONLY=0 untuk menjalankan
+#    smbd lalu WebUI di container yang sama (dipakai docker-compose.test.yml).
+ENV PYTEST_ONLY=1
+ENTRYPOINT ["/app/scripts/docker-entrypoint.sh"]
 CMD ["pytest", "-v"]

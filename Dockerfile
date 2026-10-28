@@ -26,9 +26,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --locked --no-dev --no-editable
 
 # ============================================================
-# Stage 2: samba — extract testparm and its runtime libraries only.
-# The full samba-common-bin package is not included in the final image;
-# only the required binary and libraries are copied.
+# Stage 2: samba — extract testparm and its runtime libraries.
 # ============================================================
 FROM python:3.12-slim-bookworm AS samba
 
@@ -49,7 +47,12 @@ COPY --from=samba /out/ /
 RUN ldconfig \
     && mkdir -p /var/lib/samba /var/cache/samba /run/samba
 
-# 2. Copy the builder virtual environment and application code (without uv or cache)
+# 2. User and group management needs smbpasswd/pdbedit plus useradd/groupadd
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends samba-common-bin passwd \
+    && rm -rf /var/lib/apt/lists/*
+
+# 3. Copy the builder virtual environment and application code (without uv or cache)
 COPY --from=builder /opt/venv /opt/venv
 WORKDIR /app
 COPY src/ ./src/

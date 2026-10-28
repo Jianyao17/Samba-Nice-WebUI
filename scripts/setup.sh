@@ -192,11 +192,12 @@ provision_dependencies() {
     export DEBIAN_FRONTEND=noninteractive
     local missing_pkgs=()
 
-    for cmd in smbd testparm curl tar openssl; do
+    for cmd in smbd testparm smbpasswd pdbedit useradd groupadd curl tar openssl; do
         if ! command -v "$cmd" >/dev/null 2>&1; then
             case "$cmd" in
                 smbd) missing_pkgs+=(samba) ;;
-                testparm) missing_pkgs+=(samba-common-bin) ;;
+                testparm|smbpasswd|pdbedit) missing_pkgs+=(samba-common-bin) ;;
+                useradd|groupadd) missing_pkgs+=(passwd) ;;
                 curl) missing_pkgs+=(curl ca-certificates) ;;
                 tar) missing_pkgs+=(tar) ;;
                 openssl) missing_pkgs+=(openssl) ;;
