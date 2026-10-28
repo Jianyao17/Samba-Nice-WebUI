@@ -46,6 +46,42 @@ class ValidationResult(BaseModel):
     message: str
 
 
+class SambaUser(BaseModel):
+    """
+    Represents a Samba account managed through the WebUI.
+    """
+
+    # 1. Identity and authentication state
+    username: str = Field(..., description="Lowercase Samba username")
+    enabled: bool = Field(default=True, description="Whether the account may authenticate")
+
+    # 2. Secondary group memberships
+    groups: list[str] = Field(default_factory=list, description="Group names the user belongs to")
+
+
+class SambaGroup(BaseModel):
+    """
+    Represents a Unix group used as a Samba share principal.
+    """
+
+    # 1. Group identity
+    name: str = Field(..., description="Lowercase group name")
+    gid: int = Field(default=0, description="Numeric group identifier")
+
+    # 2. Group membership
+    members: list[str] = Field(default_factory=list, description="Usernames belonging to the group")
+
+
+class UserOperationResult(BaseModel):
+    """
+    Uniform result returned by user and group mutation operations.
+    """
+
+    # 1. Outcome and human-readable explanation
+    success: bool
+    message: str
+
+
 class ServerStatus(BaseModel):
     """
     Represents the runtime operational state of the Samba service daemon (smbd).

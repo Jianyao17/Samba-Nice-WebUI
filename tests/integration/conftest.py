@@ -28,6 +28,7 @@ class SambaServer:
     port: int
     storage: Path
     include_conf: Path
+    smb_conf: Path
     pid_file: Path
 
 
@@ -150,6 +151,7 @@ def samba_server():
         port=port,
         storage=storage,
         include_conf=root / "etc" / "smb.webui.conf",
+        smb_conf=smb_conf,
         pid_file=pid_file,
     )
 
