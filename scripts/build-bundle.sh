@@ -85,7 +85,7 @@ sync_project_version
 if ! command -v uv >/dev/null 2>&1; then
     echo "Downloading uv ${UV_VERSION}..."
     TMP_UV_DIR="$(mktemp -d)"
-    curl -fsSL "$UV_URL" | tar -xz -C "$TMP_UV_DIR"
+    curl -fsSL --retry 3 --retry-delay 2 "$UV_URL" | tar -xz -C "$TMP_UV_DIR"
     find "$TMP_UV_DIR" -name uv -type f -exec cp {} /usr/local/bin/uv \;
     find "$TMP_UV_DIR" -name uvx -type f -exec cp {} /usr/local/bin/uvx \;
     chmod +x /usr/local/bin/uv /usr/local/bin/uvx
@@ -99,7 +99,7 @@ mkdir -p "$TARGET_DIR"
 
 # Download and extract standalone Python runtime
 echo "Downloading standalone Python ${PYTHON_VERSION} (${PYTHON_RELEASE_TAG})..."
-curl -fsSL "$PYTHON_URL" | tar -xz -C "$TARGET_DIR"
+curl -fsSL --retry 3 --retry-delay 2 "$PYTHON_URL" | tar -xz -C "$TARGET_DIR"
 
 if [[ ! -x "$TARGET_DIR/python/bin/python3" ]]; then
     echo "Error: Python runtime not found at $TARGET_DIR/python/bin/python3" >&2
@@ -114,13 +114,28 @@ uv venv "$TARGET_DIR/venv" --python "$TARGET_DIR/python/bin/python3"
 echo "Installing application and dependencies with uv..."
 (
     cd "$REPO_ROOT"
-    UV_PROJECT_ENVIRONMENT="$TARGET_DIR/venv" \
-    UV_COMPILE_BYTECODE=1 \
-    uv sync \
-        --locked \
-        --no-dev \
-        --no-editable \
-        --python "$TARGET_DIR/python/bin/python3"
+    sync_ok=0
+    for attempt in 1 2 3; do
+        if UV_PROJECT_ENVIRONMENT="$TARGET_DIR/venv" \
+           UV_COMPILE_BYTECODE=1 \
+           UV_HTTP_RETRIES=8 \
+           UV_HTTP_TIMEOUT=60 \
+           UV_CONCURRENT_DOWNLOADS=4 \
+           uv sync \
+               --locked \
+               --no-dev \
+               --no-editable \
+               --python "$TARGET_DIR/python/bin/python3"; then
+            sync_ok=1
+            break
+        fi
+        echo "uv sync failed on attempt ${attempt}/3. Retrying in 5 seconds..."
+        sleep 5
+    done
+    if [[ "$sync_ok" -ne 1 ]]; then
+        echo "Error: uv sync failed after 3 attempts." >&2
+        exit 1
+    fi
 )
 
 # Copy metadata and service unit into bundle layout
@@ -135,13 +150,22 @@ if [[ ! -x "$TARGET_DIR/venv/bin/samba-nice-webui" ]]; then
 fi
 
 echo "Verifying bundle entrypoint..."
-# Verify interpreter starts without bad interpreter / missing path errors
-"$TARGET_DIR/venv/bin/samba-nice-webui" --help 2>&1 || true
+# Verify shebang references the target virtualenv interpreter
+ENTRYPOINT_SHEBANG="$(head -n 1 "$TARGET_DIR/venv/bin/samba-nice-webui")"
+if [[ "$ENTRYPOINT_SHEBANG" != "#!$TARGET_DIR/venv/bin/python"* ]]; then
+    echo "Error: unexpected shebang in entrypoint: $ENTRYPOINT_SHEBANG" >&2
+    exit 1
+fi
+
+# Verify the bundled standalone Python interpreter runs and can import the application
+"$TARGET_DIR/venv/bin/python" --version
+"$TARGET_DIR/venv/bin/python" -c "import src; print('Bundle entrypoint and application packages verified successfully.')"
 
 # Package into tarball
 mkdir -p "$OUTPUT_DIR"
+BUILD_DATE="$(date -u +'%Y-%m-%d %H:%M:%SZ')"
 echo "Creating archive at ${BUNDLE_PATH}..."
-tar -czf "$BUNDLE_PATH" -C /opt samba-nice-webui
+tar --clamp-mtime --mtime="$BUILD_DATE" -czf "$BUNDLE_PATH" -C /opt samba-nice-webui
 
 echo "Archive layout check:"
 tar -tzf "$BUNDLE_PATH" > /tmp/tar_contents.txt

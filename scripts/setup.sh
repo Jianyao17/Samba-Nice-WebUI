@@ -544,7 +544,7 @@ install_bundle() {
     echo "Extracting bundle to staging directory..."
     run rm -rf "$staging_dir"
     run mkdir -p "$staging_dir"
-    run tar -xzf "$DOWNLOADED_ARCHIVE" --strip-components=1 -C "$staging_dir"
+    run tar --warning=no-timestamp -xzf "$DOWNLOADED_ARCHIVE" --strip-components=1 -C "$staging_dir"
 
     if [[ "$DRY_RUN" -eq 0 && ! -x "${staging_dir}/venv/bin/samba-nice-webui" ]]; then
         echo "Error: Staged entrypoint not executable: ${staging_dir}/venv/bin/samba-nice-webui" >&2

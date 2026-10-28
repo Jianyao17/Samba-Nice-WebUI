@@ -29,7 +29,7 @@ if [[ "${1:-}" == "--in-container" ]]; then
 
     echo "Extracting release bundle to /opt..."
     mkdir -p /opt
-    tar -xzf "$ARCHIVE_PATH" -C /opt
+    tar --warning=no-timestamp -xzmf "$ARCHIVE_PATH" -C /opt
 
     if [[ ! -x /opt/samba-nice-webui/venv/bin/samba-nice-webui ]]; then
         echo "Error: bundle entrypoint /opt/samba-nice-webui/venv/bin/samba-nice-webui not executable" >&2
@@ -37,6 +37,7 @@ if [[ "${1:-}" == "--in-container" ]]; then
     fi
 
     TIMESTAMP_FILE="/tmp/smoke_test_timestamp"
+    sleep 1
     touch "$TIMESTAMP_FILE"
     sleep 1
 
