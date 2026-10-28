@@ -2,20 +2,21 @@ from nicegui import ui
 
 from src.config import settings
 from src.samba.backend import SambaBackend
-from src.ui.layout import page_layout
+from src.ui.layout import page_layout, render_page_header
 
 
 def create_dashboard_page(backend: SambaBackend):
-    with page_layout("Dashboard", backend) as authenticated:
+    with page_layout("Dashboard", backend, show_title=False) as authenticated:
         if not authenticated:
             return
 
         status = backend.get_status()
         shares = backend.list_shares()
 
-        ui.label(
-            "Overview of Samba daemon status, active network shares, and storage roots."
-        ).classes("text-sm text-slate-500 -mt-1.5 mb-1")
+        render_page_header(
+            "Dashboard",
+            "Overview of Samba daemon status, active network shares, and storage roots.",
+        )
 
         # 1. Metric summary cards
         with ui.row().classes("w-full grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4"):
@@ -149,7 +150,8 @@ def create_dashboard_page(backend: SambaBackend):
                     {"name": "path", "label": "Target Path", "field": "path", "align": "left", "sortable": True, "classes": "whitespace-nowrap", "headerClasses": "whitespace-nowrap"},
                     {"name": "access", "label": "Access", "field": "access", "align": "center", "classes": "whitespace-nowrap", "headerClasses": "whitespace-nowrap"},
                     {"name": "guest", "label": "Guest", "field": "guest", "align": "center", "classes": "whitespace-nowrap", "headerClasses": "whitespace-nowrap"},
-                    {"name": "conf_file", "label": "Source File", "field": "conf_file", "align": "left", "classes": "whitespace-nowrap", "headerClasses": "whitespace-nowrap"},
+                    {"name": "users", "label": "Valid Users", "field": "users", "align": "left", "classes": "whitespace-nowrap", "headerClasses": "whitespace-nowrap"},
+                    {"name": "writelist", "label": "Write List", "field": "writelist", "align": "left", "classes": "whitespace-nowrap", "headerClasses": "whitespace-nowrap"},
                 ]
                 rows = [
                     {
@@ -157,14 +159,17 @@ def create_dashboard_page(backend: SambaBackend):
                         "path": s.path,
                         "access": "Read-Only" if s.read_only else "Read/Write",
                         "guest": "Yes" if s.guest_ok else "No",
-                        "conf_file": s.conf_file or "modular",
+                        "users": s.valid_users or "Everyone",
+                        "users_everyone": not s.valid_users.strip(),
+                        "writelist": s.write_list or "None",
+                        "writelist_none": not s.write_list.strip(),
                     }
                     for s in shares
                 ]
                 with ui.element("div").classes("w-full overflow-x-auto select-none sm:select-text"):
                     table = (
                         ui.table(columns=columns, rows=rows, row_key="name")
-                        .props("flat :rows-per-page-options='[0]' hide-pagination table-style='min-width:650px'")
+                        .props("flat :rows-per-page-options='[0]' hide-pagination table-style='min-width:950px'")
                         .classes("w-full")
                     )
                     table.add_slot("body-cell-name", """
@@ -196,8 +201,35 @@ def create_dashboard_page(backend: SambaBackend):
                             </q-badge>
                         </q-td>
                     """)
-                    table.add_slot("body-cell-conf_file", """
+                    table.add_slot("body-cell-users", """
                         <q-td :props="props" class="whitespace-nowrap">
-                            <span class="font-mono text-xs text-slate-400 whitespace-nowrap">{{ props.value }}</span>
+                            <div class="row items-center no-wrap q-gutter-x-xs">
+                                <q-icon
+                                    :name="props.row.users_everyone ? 'public' : 'group'"
+                                    size="0.95rem"
+                                    :class="props.row.users_everyone ? 'text-slate-400' : 'text-indigo-500'"
+                                />
+                                <span
+                                    :class="props.row.users_everyone
+                                        ? 'text-xs italic text-slate-400'
+                                        : 'font-mono text-xs text-slate-600 dark:text-slate-300'"
+                                >{{ props.value }}</span>
+                            </div>
+                        </q-td>
+                    """)
+                    table.add_slot("body-cell-writelist", """
+                        <q-td :props="props" class="whitespace-nowrap">
+                            <div class="row items-center no-wrap q-gutter-x-xs">
+                                <q-icon
+                                    :name="props.row.writelist_none ? 'edit_off' : 'edit_note'"
+                                    size="0.95rem"
+                                    :class="props.row.writelist_none ? 'text-slate-400' : 'text-emerald-600'"
+                                />
+                                <span
+                                    :class="props.row.writelist_none
+                                        ? 'text-xs italic text-slate-400'
+                                        : 'font-mono text-xs text-slate-600 dark:text-slate-300'"
+                                >{{ props.value }}</span>
+                            </div>
                         </q-td>
                     """)
