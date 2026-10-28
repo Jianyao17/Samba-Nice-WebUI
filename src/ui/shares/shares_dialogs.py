@@ -10,10 +10,13 @@ from nicegui import ui
 from src.config import settings
 from src.core.models import ShareConfig
 from src.core.security import is_path_safe
-from src.samba.backend import SambaBackend
 from src.samba.parser import sanitize_share_name
+from src.samba.backend import SambaBackend
+from src.samba.user_backend import SambaUserBackend
+from src.samba.linux_user_backend import split_share_principals
 from src.storage.dir_manager import StorageDirectoryManager
 from src.ui.shares.directory_tree import DirectoryTree
+from src.ui.dialog_utils import submit_on_enter
 
 
 def open_directory_browser_dialog(
@@ -104,16 +107,37 @@ def open_directory_browser_dialog(
     dialog.open()
 
 
+def _build_principal_options(
+    user_backend: Optional[SambaUserBackend],
+    current_values: list[str],
+) -> list[str]:
+    """Combine Samba users, groups, and existing share principals for a chip select."""
+    options: set[str] = set()
+
+    if user_backend is not None:
+        try:
+            options.update(user.username for user in user_backend.list_users())
+            options.update(f"@{group.name}" for group in user_backend.list_groups())
+        except Exception:
+            # User management may be unavailable on hosts without Samba tooling
+            pass
+
+    # Keep existing principals selectable even if they no longer exist
+    options.update(current_values)
+    return sorted(options)
+
+
 def open_share_dialog(
     share: Optional[ShareConfig],
     backend: SambaBackend,
     dir_manager: StorageDirectoryManager,
     on_saved: Callable,
+    user_backend: Optional[SambaUserBackend] = None,
 ) -> None:
     """Open the share editor for creation or editing/renaming."""
     is_edit = share is not None
     original_name = share.name if share is not None else None
-    dialog = ui.dialog()
+    dialog = ui.dialog().props("persistent")
 
     with dialog, ui.card().props("flat bordered").classes(
         "w-full max-w-2xl p-0 rounded-2xl overflow-hidden shadow-xl"
@@ -181,19 +205,79 @@ def open_share_dialog(
                 read_only_check = ui.checkbox(
                     "Read Only", value=share.read_only if is_edit else False
                 )
+                with read_only_check:
+                    ui.tooltip(
+                        "Clients cannot create, modify, or delete files. Write List "
+                        "still identifies users and groups, but nobody can write "
+                        "while Read Only is enabled."
+                    ).props('anchor="top middle" self="bottom middle"').classes(
+                        "max-w-xs text-xs leading-snug rounded-md px-3 py-2"
+                    ).style(
+                        "background-color: #ffffff; color: #1e293b; "
+                        "border: 1px solid #e2e8f0; box-shadow: 0 4px 12px "
+                        "rgba(15, 23, 42, 0.12);"
+                    )
+
                 browsable_check = ui.checkbox(
                     "Browseable", value=share.browsable if is_edit else True
                 )
+                with browsable_check:
+                    ui.tooltip(
+                        "Shows this share in the network browse list. It does not "
+                        "grant access; use Valid Users to control who can connect."
+                    ).props('anchor="top middle" self="bottom middle"').classes(
+                        "max-w-xs text-xs leading-snug rounded-md px-3 py-2"
+                    ).style(
+                        "background-color: #ffffff; color: #1e293b; "
+                        "border: 1px solid #e2e8f0; box-shadow: 0 4px 12px "
+                        "rgba(15, 23, 42, 0.12);"
+                    )
+
                 guest_ok_check = ui.checkbox(
                     "Guest OK", value=share.guest_ok if is_edit else False
                 )
+                with guest_ok_check:
+                    ui.tooltip(
+                        "Allows anonymous clients to connect without a password. "
+                        "Valid Users and Write List still apply to authenticated "
+                        "users, but guests are not checked against those lists."
+                    ).props('anchor="top middle" self="bottom middle"').classes(
+                        "max-w-xs text-xs leading-snug rounded-md px-3 py-2"
+                    ).style(
+                        "background-color: #ffffff; color: #1e293b; "
+                        "border: 1px solid #e2e8f0; box-shadow: 0 4px 12px "
+                        "rgba(15, 23, 42, 0.12);"
+                    )
 
-            valid_users_input = ui.input(
-                "Valid Users (optional)", value=share.valid_users if is_edit else ""
-            ).props("outlined dense").classes("w-full")
-            write_list_input = ui.input(
-                "Write List (optional)", value=share.write_list if is_edit else ""
-            ).props("outlined dense").classes("w-full")
+            initial_valid_users = (
+                split_share_principals(share.valid_users) if is_edit else []
+            )
+            initial_write_list = (
+                split_share_principals(share.write_list) if is_edit else []
+            )
+            principal_options = _build_principal_options(
+                user_backend,
+                sorted(set(initial_valid_users + initial_write_list)),
+            )
+
+            valid_users_input = ui.select(
+                options=principal_options,
+                label="Valid Users (optional)",
+                value=initial_valid_users,
+                multiple=True,
+                with_input=True,
+            ).props("outlined dense use-chips").classes("w-full")
+            write_list_input = ui.select(
+                options=principal_options,
+                label="Write List (optional)",
+                value=initial_write_list,
+                multiple=True,
+                with_input=True,
+            ).props("outlined dense use-chips").classes("w-full")
+            ui.label(
+                "Pick Samba users or @groups. Multiple selections are stored as a "
+                "comma-separated list."
+            ).classes("text-xs text-slate-400 -mt-2")
 
             if is_edit:
                 ui.label(
@@ -271,8 +355,8 @@ def open_share_dialog(
                 read_only=read_only_check.value,
                 browsable=browsable_check.value,
                 guest_ok=guest_ok_check.value,
-                valid_users=valid_users_input.value or "",
-                write_list=write_list_input.value or "",
+                valid_users=", ".join(valid_users_input.value or []),
+                write_list=", ".join(write_list_input.value or []),
                 extra_options=dict(share.extra_options) if is_edit else {},
                 conf_file=settings.samba_include_conf_path.name,
             )
@@ -292,6 +376,9 @@ def open_share_dialog(
             on_saved()
         else:
             ui.notify(result.message, type="negative")
+
+    for field in (name_input, path_input, comment_input):
+        submit_on_enter(field, lambda: save_share_data())
 
     dialog.open()
 

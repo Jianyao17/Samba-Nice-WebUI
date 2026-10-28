@@ -8,17 +8,19 @@ from src.ui.backup.backup_components import (
     render_history_entry,
 )
 from src.ui.backup.backup_dialogs import open_undo_dialog
-from src.ui.layout import page_layout
+from src.ui.layout import page_layout, render_page_header
 
 
 def create_backup_page(backend: SambaBackend, backup_manager: BackupManager):
-    with page_layout("Configuration History", backend) as authenticated:
+    with page_layout("Configuration History", backend, show_title=False) as authenticated:
         if not authenticated:
             return
 
-        ui.label(
-            "Review configuration changes and undo them. Click any entry to inspect change details."
-        ).classes("text-sm text-gray-500 mb-2")
+        render_page_header(
+            "Configuration History",
+            "Review configuration changes and undo them. Click any entry to inspect "
+            "change details.",
+        )
 
         history_container = ui.column().classes("w-full gap-2.5")
 

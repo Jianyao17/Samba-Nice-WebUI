@@ -5,7 +5,7 @@ from src.core.security import is_path_safe
 from src.samba.backend import SambaBackend
 from src.storage.dir_manager import StorageDirectoryManager
 
-from src.ui.layout import page_layout
+from src.ui.layout import page_layout, render_page_header
 from src.ui.storage.storage_components import render_icons_view, render_list_view
 from src.ui.storage.storage_dialogs import (
     open_delete_dialog,
@@ -15,13 +15,13 @@ from src.ui.storage.storage_dialogs import (
 
 
 def create_storage_page(backend: SambaBackend, dir_manager: StorageDirectoryManager):
-    with page_layout("Storage Explorer", backend) as authenticated:
+    with page_layout("Storage Explorer", backend, show_title=False) as authenticated:
         if not authenticated:
             return
 
-        # ── Page header (description only) ───────────────────────────────────
-        ui.label("Explore files and folders within allowed storage roots").classes(
-            "text-sm text-slate-500 mb-3"
+        render_page_header(
+            "Storage Explorer",
+            "Explore files and folders within allowed storage roots.",
         )
 
         # ── One independent folder browser per allowed storage root ──────────

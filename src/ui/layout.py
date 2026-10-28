@@ -20,8 +20,52 @@ _NAV_ITEMS = [
     ("Dashboard", "/", "space_dashboard", lambda t: t == "Dashboard"),
     ("Shares", "/shares", "folder_shared", lambda t: "Share" in t),
     ("Storage", "/storage", "inventory_2", lambda t: "Storage" in t),
+    ("Users", "/users", "manage_accounts", lambda t: "User" in t or "Group" in t),
     ("History", "/backups", "history", lambda t: "History" in t or "Backup" in t),
 ]
+
+_TITLE_CLASSES = "text-2xl font-bold text-slate-800 dark:text-slate-100"
+_DESCRIPTION_CLASSES = "text-sm text-slate-500 min-w-0 sm:flex-1"
+_COUNT_CLASSES = (
+    "grid place-items-center w-7 h-7 rounded-full bg-blue-600 text-white "
+    "text-xs font-bold shadow-sm"
+)
+
+
+def render_page_header(
+    title: str,
+    description: str,
+    *,
+    count: bool = False,
+    action_label: str = "",
+    action_icon: str | None = None,
+    on_action=None,
+) -> ui.label | None:
+    """Render a consistent title, description, count, and optional action."""
+    count_label: ui.label | None = None
+
+    with ui.column().classes("w-full gap-3"):
+        with ui.row().classes("w-full items-center gap-2 min-w-0 flex-wrap"):
+            ui.label(title).classes(_TITLE_CLASSES)
+            if count:
+                with ui.element("div").classes(_COUNT_CLASSES):
+                    count_label = ui.label("0").classes("leading-none")
+
+        with ui.element("div").classes(
+            "w-full flex flex-col sm:flex-row sm:items-center "
+            "sm:justify-between gap-2"
+        ):
+            ui.label(description).classes(_DESCRIPTION_CLASSES)
+            if action_label and on_action is not None:
+                ui.button(
+                    action_label,
+                    icon=action_icon,
+                    on_click=on_action,
+                ).props("unelevated no-caps color=primary").classes(
+                    "rounded-lg w-full sm:w-auto shrink-0"
+                )
+
+    return count_label
 
 
 @contextmanager
@@ -85,7 +129,7 @@ def page_layout(title: str, backend: SambaBackend, *, show_title: bool = True):
 
         # Baris 2 (Mobile) / Tengah (Desktop): Tombol halaman sebaris dengan tinggi penuh & hover luas
         with ui.element("nav").classes(
-            "order-3 md:order-2 w-full md:w-auto h-11 sm:h-12 md:h-14 grid grid-cols-4 md:flex md:items-stretch border-t border-slate-800 md:border-t-0 p-0 m-0"
+            "order-3 md:order-2 w-full md:w-auto h-11 sm:h-12 md:h-14 grid grid-cols-5 md:flex md:items-stretch border-t border-slate-800 md:border-t-0 p-0 m-0"
         ):
             for label, path, icon, is_active_fn in _NAV_ITEMS:
                 active = is_active_fn(title)
@@ -101,9 +145,11 @@ def page_layout(title: str, backend: SambaBackend, *, show_title: bool = True):
                 )
                 with ui.link(target=path).classes(btn_classes):
                     ui.icon(icon, size="1.05rem").classes(
-                        "shrink-0 " + ("text-blue-400" if active else "text-slate-400")
+                        "shrink-0 transition-transform duration-200 "
+                        "hover:scale-110 "
+                        + ("text-blue-400" if active else "text-slate-400")
                     )
-                    ui.label(label).classes("leading-none truncate")
+                    ui.label(label).classes("leading-none truncate max-md:hidden")
 
     # Compact spacing between bar and title/content
     with ui.column().classes("w-full max-w-7xl mx-auto px-4 sm:px-6 pt-3 pb-8 gap-3"):

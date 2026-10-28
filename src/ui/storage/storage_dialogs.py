@@ -5,6 +5,7 @@ from nicegui import ui
 
 from src.samba.backend import SambaBackend
 from src.storage.dir_manager import StorageDirectoryManager
+from src.ui.dialog_utils import submit_on_enter
 
 
 def open_rename_dialog(
@@ -55,6 +56,7 @@ def open_rename_dialog(
             ui.button("Cancel", on_click=dialog.close).props("flat no-caps color=grey-7")
             ui.button("Rename", on_click=execute_rename).props("unelevated no-caps color=primary").classes("rounded-lg")
 
+    submit_on_enter(name_input, execute_rename)
     dialog.open()
 
 
@@ -144,4 +146,5 @@ def open_new_folder_dialog(
             ui.button("Cancel", on_click=dialog.close).props("flat no-caps color=grey-7")
             ui.button("Create", on_click=execute_create).props("unelevated no-caps color=primary").classes("rounded-lg")
 
+    submit_on_enter(folder_input, execute_create)
     dialog.open()
