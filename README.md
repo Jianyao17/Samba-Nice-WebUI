@@ -15,7 +15,7 @@
 
 ---
 
-Samba-Nice-WebUI lets you create, edit, and organize Samba shares from a clean browser UI instead of hand-editing `smb.conf`. It is written in Python with [NiceGUI](https://nicegui.io/) for the interface and [Pydantic](https://docs.pydantic.dev/) for typed configuration, and ships as a single small, non-privileged Docker container.
+Samba-Nice-WebUI lets you create, edit, and organize Samba shares from a clean browser UI instead of hand-editing `smb.conf`. It is written in Python with [NiceGUI](https://nicegui.io/) for the interface and [Pydantic](https://docs.pydantic.dev/) for typed configuration, and can be install via Docker Container or directly on linux host machine.
 
 ## ✨ Features
 
@@ -23,6 +23,7 @@ Samba-Nice-WebUI lets you create, edit, and organize Samba shares from a clean b
 - **Share Management** – Create, edit, rename, and delete shares, with duplicate-name protection.
 - **Directory Picker** – Browse a lazy, expandable folder tree to choose a share path inside your allowed storage roots.
 - **Storage Explorer** – Browse and create folders in list or icon view, with one panel per storage root.
+- **User & Group Management** – Create Samba accounts, change passwords, enable/disable users, and manage Unix groups used by share access lists.
 - **SMB Access Address** – Every share shows a copyable `smb://` address (and a Windows UNC path when applicable).
 - **Safe Config Handling** – All shares live in one dedicated include file, so your main `smb.conf` is never touched. Every change is validated with `testparm` before it is applied.
 - **Change History & Undo** – A linear history with field-level diff previews and one-click undo.
@@ -103,6 +104,11 @@ services:
       - /etc/samba:/etc/samba
       - /var/run/samba:/var/run/samba
       - /srv/samba:/storage   # host folder that holds your shared data
+      # Volume for user management feature
+      # - /var/lib/samba/private:/var/lib/samba/private
+      # - /etc/passwd:/etc/passwd
+      # - /etc/shadow:/etc/shadow
+      # - /etc/group:/etc/group
 ```
 
 **3. Start it:**
@@ -114,6 +120,34 @@ docker compose up -d
 Open `http://<your-server-ip>:8080` and sign in with the credentials you set.
 
 > **Note:** Change `WEBUI_ADMIN_PASSWORD` and `WEBUI_SECRET_KEY` before exposing the app to a network.
+
+## 👥 User & Group Management
+
+The **Users** page creates Samba accounts and Unix groups referenced by a share's
+`valid users`, `write list`, and `@groupname` rules. It creates no-login Unix
+accounts, sets or changes Samba passwords, enables/disables authentication, and
+manages group memberships. Users and groups still referenced by an active share
+cannot be deleted, and system accounts or groups (GID below 1000) are protected.
+
+- **Bare-metal:** the installer provides `smbpasswd`/`pdbedit` and
+  `useradd`/`groupadd`; the systemd unit may write `/etc/passwd`, `/etc/shadow`,
+  `/etc/group`, `/etc/samba`, and `/var/lib/samba/private`.
+- **Docker:** the feature is optional and needs the host identity database
+  mounted into the container:
+
+```yaml
+volumes:
+  - /var/lib/samba/private:/var/lib/samba/private
+  - /etc/passwd:/etc/passwd
+  - /etc/shadow:/etc/shadow
+  - /etc/group:/etc/group
+```
+
+Without these mounts the WebUI still manages shares normally, but user and group
+changes fail with a clear error. Mounting `/etc/shadow` gives the container write
+access to host credentials, so only enable it on trusted hosts. Disabling or
+deleting a user blocks new authentications; existing SMB sessions may stay
+connected until the client disconnects.
 
 ## ⚙️ Environment Variables
 
