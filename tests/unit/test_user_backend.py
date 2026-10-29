@@ -273,6 +273,23 @@ def test_list_users_and_groups_include_primary_group(backend, runner):
     ]
 
 
+def test_list_groups_hides_system_groups_with_members(backend, runner):
+    runner.samba_users = ["alice"]
+    backend.passwd_file.write_text(
+        "alice:x:1000:1000::/home/alice:/sbin/nologin\n", encoding="utf-8"
+    )
+    backend.group_file.write_text(
+        "sudo:x:27:alice\nusers:x:100:\ndevelopers:x:1500:\n",
+        encoding="utf-8",
+    )
+
+    groups = backend.list_groups()
+
+    assert [(group.name, group.gid) for group in groups] == [
+        ("developers", 1500)
+    ]
+
+
 def test_delete_group_rejects_primary_group(backend, runner):
     runner.samba_users = ["alice"]
     backend.passwd_file.write_text(

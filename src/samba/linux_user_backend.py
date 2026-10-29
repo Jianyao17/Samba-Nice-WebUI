@@ -544,9 +544,9 @@ class LinuxSambaUserBackend(SambaUserBackend):
         """
         List groups that can be used as Samba principals.
 
-        Newly created groups are shown even before they have members, while
-        system groups (GID below 1000) stay hidden unless a Samba user belongs
-        to them.
+        System groups (GID below 1000) are always hidden so distribution-managed
+        groups do not clutter the page. Groups with GID 1000 and above are shown,
+        including newly created ones that do not have members yet.
         """
         samba_users = set(self._samba_accounts())
         groups = self._read_groups()
@@ -565,9 +565,9 @@ class LinuxSambaUserBackend(SambaUserBackend):
 
         listed: list[SambaGroup] = []
         for group in groups.values():
-            members = sorted(set(group.members) | primary_members.get(group.name, set()))
-            if not members and group.gid <= _SYSTEM_GID_MAX:
+            if group.gid <= _SYSTEM_GID_MAX:
                 continue
+            members = sorted(set(group.members) | primary_members.get(group.name, set()))
             listed.append(
                 SambaGroup(
                     name=group.name,

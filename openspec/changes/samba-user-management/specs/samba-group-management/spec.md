@@ -8,15 +8,25 @@ so that shares can be granted to groups (`@groupname`) rather than individual us
 ## ADDED Requirements
 
 ### Requirement: List groups
-The system SHALL list all Unix groups that contain at least one Samba-managed user,
-showing the group name (normalized to lowercase), GID, and member list.
+The system SHALL list every Unix group whose GID is 1000 or above, showing the
+group name (normalized to lowercase), GID, and member list. Groups with a GID
+below 1000 SHALL always be hidden, even when they contain Samba users.
 
 #### Scenario: Groups exist
 - **WHEN** the administrator opens the Groups section of the Users page
-- **THEN** all groups containing Samba users are listed with their names and members
+- **THEN** every group with GID 1000 or above is listed with its name and members
+
+#### Scenario: Newly created group without members
+- **WHEN** a group was created through the WebUI and has no members yet
+- **THEN** the group is still listed so members can be assigned to it
+
+#### Scenario: System groups are hidden
+- **WHEN** the host has distribution-managed groups such as `sudo`, `users`, or
+  `www-data` with a GID below 1000
+- **THEN** those groups do not appear in the Groups section
 
 #### Scenario: No groups exist
-- **WHEN** no groups have been created
+- **WHEN** no groups with GID 1000 or above exist
 - **THEN** an empty state with a prompt to add the first group is shown
 
 ### Requirement: Create group

@@ -269,7 +269,8 @@ def render_users_empty_state() -> None:
         "person_off",
         "bg-blue-50 text-blue-500 dark:bg-blue-950/40 dark:text-blue-400",
         "No Samba users yet",
-        "Samba users can sign in to shares protected by valid users and write list.",
+        "Only accounts with a Samba password can sign in. Existing Linux users "
+        "are not listed until they are registered with Samba.",
         "Use Add User in the header above to get started",
     )
 

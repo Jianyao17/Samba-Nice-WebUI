@@ -1,3 +1,4 @@
+import logging
 import os
 import signal
 import subprocess
@@ -14,6 +15,9 @@ from src.samba.parser import (
     serialize_all_shares,
 )
 from src.samba.share_ops import ShareMutationError, prepare_share_save
+
+
+logger = logging.getLogger(__name__)
 
 
 class LinuxHostSambaBackend(SambaBackend):
@@ -194,6 +198,10 @@ class LinuxHostSambaBackend(SambaBackend):
     def reload_service(self) -> bool:
         # 1. Verify existence of the PID file
         if not self.pid_file.exists():
+            logger.warning(
+                "Cannot reload smbd: PID file %s does not exist.",
+                self.pid_file,
+            )
             return False
 
         try:
@@ -205,5 +213,10 @@ class LinuxHostSambaBackend(SambaBackend):
             self.last_reloaded_at = datetime.now()
             return True
 
-        except (ValueError, ProcessLookupError, PermissionError):
+        except (ValueError, OSError) as exc:
+            logger.warning(
+                "Cannot signal smbd from PID file %s: %s",
+                self.pid_file,
+                exc,
+            )
             return False
