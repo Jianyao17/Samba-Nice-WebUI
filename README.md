@@ -104,11 +104,14 @@ services:
       - /etc/samba:/etc/samba
       - /var/run/samba:/var/run/samba
       - /srv/samba:/storage   # host folder that holds your shared data
-      # Volume for user management feature
-      # - /var/lib/samba/private:/var/lib/samba/private
-      # - /etc/passwd:/etc/passwd
-      # - /etc/shadow:/etc/shadow
-      # - /etc/group:/etc/group
+      # Host identity database, required by the Users page. Remove these
+      # lines if you only manage shares; they grant the container write
+      # access to host credentials.
+      - /var/lib/samba/private:/var/lib/samba/private
+      - /etc/passwd:/etc/passwd
+      - /etc/shadow:/etc/shadow
+      - /etc/gshadow:/etc/gshadow
+      - /etc/group:/etc/group
 ```
 
 **3. Start it:**
@@ -121,6 +124,11 @@ Open `http://<your-server-ip>:8080` and sign in with the credentials you set.
 
 > **Note:** Change `WEBUI_ADMIN_PASSWORD` and `WEBUI_SECRET_KEY` before exposing the app to a network.
 
+Image tags: `latest` follows the newest release, while a version tag such as
+`1.1.0` pins an exact release (the git tag is `v1.1.0`; the image tag drops the
+leading `v`). Pull a pinned version with
+`docker pull ghcr.io/jianyao17/samba-nice-webui:1.1.0`.
+
 ## 👥 User & Group Management
 
 The **Users** page creates Samba accounts and Unix groups referenced by a share's
@@ -128,12 +136,22 @@ The **Users** page creates Samba accounts and Unix groups referenced by a share'
 accounts, sets or changes Samba passwords, enables/disables authentication, and
 manages group memberships. Users and groups still referenced by an active share
 cannot be deleted, and system accounts or groups (GID below 1000) are protected.
+The Groups section only lists groups with GID 1000 and above, so distribution
+groups such as `sudo`, `users`, or `www-data` never appear there.
 
-- **Bare-metal:** the installer provides `smbpasswd`/`pdbedit` and
-  `useradd`/`groupadd`; the systemd unit may write `/etc/passwd`, `/etc/shadow`,
-  `/etc/group`, `/etc/samba`, and `/var/lib/samba/private`.
-- **Docker:** the feature is optional and needs the host identity database
-  mounted into the container:
+The page lists **Samba accounts** reported by `pdbedit -L`, not every Linux
+account. A Linux user becomes a Samba user only after it has a Samba password
+(`smbpasswd -a <user>`); accounts without one cannot authenticate and do not
+appear on the page. **Add User** creates a new no-login Unix account, so an
+existing Linux account still has to be registered with `smbpasswd -a` on the
+host.
+
+- **Bare-metal:** the installer provides `smbpasswd` and `testparm` from
+  `samba-common-bin`, `pdbedit` from `samba`, and `useradd`/`groupadd` from
+  `passwd`; the systemd unit may write `/etc/passwd`, `/etc/shadow`,
+  `/etc/group`, `/etc/gshadow`, `/etc/samba`, and `/var/lib/samba/private`.
+- **Docker:** the feature needs the host identity database mounted into the
+  container:
 
 ```yaml
 volumes:
@@ -141,13 +159,34 @@ volumes:
   - /etc/passwd:/etc/passwd
   - /etc/shadow:/etc/shadow
   - /etc/group:/etc/group
+  - /etc/gshadow:/etc/gshadow
 ```
 
-Without these mounts the WebUI still manages shares normally, but user and group
-changes fail with a clear error. Mounting `/etc/shadow` gives the container write
-access to host credentials, so only enable it on trusted hosts. Disabling or
-deleting a user blocks new authentications; existing SMB sessions may stay
-connected until the client disconnects.
+Without these mounts the WebUI still manages shares normally, but the Users page
+only sees the container's own accounts and changes fail with a clear error.
+Mounting `/etc/shadow` gives the container write access to host credentials, so
+only enable it on trusted hosts. Disabling or deleting a user blocks new
+authentications; existing SMB sessions may stay connected until the client
+disconnects.
+
+**Reloading smbd:** the reload button sends `SIGHUP` to the PID in
+`SAMBA_PID_FILE`. In Docker this needs `pid: "host"` (or a shared PID namespace
+with a Samba sidecar) plus a writable `/var/run/samba` mount. On Docker Desktop
+for Windows and macOS, `pid: "host"` points at the Docker VM rather than your
+desktop, so the release image cannot signal a Samba daemon running outside that
+VM. Run the image on the Linux host, or give the Samba container and the WebUI
+the same PID namespace. To diagnose a failure, compare the PID file with the
+process table and try the signal manually:
+
+```bash
+docker inspect -f '{{.HostConfig.PidMode}}' samba-nice-webui
+docker exec samba-nice-webui cat /var/run/samba/smbd.pid
+docker exec samba-nice-webui kill -HUP "$(cat /var/run/samba/smbd.pid)"
+```
+
+`No such process` means the PID namespace is not shared; `Operation not
+permitted` means the container runs without permission to signal the host
+daemon (for example rootless Docker or a user namespace remap).
 
 ## ⚙️ Environment Variables
 

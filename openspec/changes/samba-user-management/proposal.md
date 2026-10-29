@@ -28,10 +28,11 @@ Underlying directory and file access is handled cleanly by configuring Samba sha
   and normalized to lowercase across UI inputs, backend validations, and system commands.
 - **New**: `/users` WebUI page — manage Samba users (add, change password, enable/disable,
   delete) and groups (add, assign members, delete).
-- **Modified**: `setup.sh` — installs `samba-common-bin` (which provides `smbpasswd`,
-  `pdbedit`) as a required host dependency.
-- **Modified**: `Dockerfile` (production WebUI-Docker image) — installs `samba-common-bin`
-  and `passwd` (which provides `useradd`, `groupadd`) inside the image.
+- **Modified**: `setup.sh` — installs `samba-common-bin` (for `smbpasswd` and
+  `testparm`) and `samba` (for `pdbedit`) as required host dependencies.
+- **Modified**: `Dockerfile` (production WebUI-Docker image) — extracts `testparm`
+  and `pdbedit` from a `samba` builder stage, and installs `samba-common-bin` plus
+  `passwd` (which provides `useradd`, `groupadd`) inside the runtime image.
 - **Modified**: `docker-compose.test.yml` — replaces the separate `samba-server` +
   `webui` containers with a single all-in-one container built from `Dockerfile.test`,
   which already contains the full Samba stack.
@@ -58,7 +59,8 @@ Underlying directory and file access is handled cleanly by configuring Samba sha
 ### Modified Capabilities
 
 - `linux-installer`: The installer must also provision `samba-common-bin` (for
-  `smbpasswd` and `pdbedit`) as a required host dependency alongside `smbd`.
+  `smbpasswd`) and `samba` (for `pdbedit`) as required host dependencies alongside
+  `smbd`.
 
 ## Impact
 
@@ -67,8 +69,9 @@ Underlying directory and file access is handled cleanly by configuring Samba sha
 - **`src/core/models.py`**: New `SambaUser` and `SambaGroup` Pydantic models.
 - **`src/ui/users/`**: New page module (`users_page.py`, `users_components.py`, `users_dialogs.py`).
 - **`src/main.py`**: Register `/users` page route and wire `LinuxSambaUserBackend`.
-- **`scripts/setup.sh`**: Add `samba-common-bin` to the apt dependency list.
-- **`Dockerfile`**: Add `samba-common-bin` + `passwd` packages to the runtime image.
+- **`scripts/setup.sh`**: Add `samba-common-bin` and `samba` to the apt dependency list.
+- **`Dockerfile`**: Extract `testparm`/`pdbedit` from a `samba` builder stage and add
+  `samba-common-bin` + `passwd` to the runtime image.
 - **`Dockerfile.test`**: Ensure `passwd` package is present (may already be; verify).
 - **`docker-compose.test.yml`**: Restructure to use the `Dockerfile.test` all-in-one
   image instead of two separate containers.

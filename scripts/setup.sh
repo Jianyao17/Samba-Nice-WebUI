@@ -195,8 +195,8 @@ provision_dependencies() {
     for cmd in smbd testparm smbpasswd pdbedit useradd groupadd curl tar openssl; do
         if ! command -v "$cmd" >/dev/null 2>&1; then
             case "$cmd" in
-                smbd) missing_pkgs+=(samba) ;;
-                testparm|smbpasswd|pdbedit) missing_pkgs+=(samba-common-bin) ;;
+                smbd|pdbedit) missing_pkgs+=(samba) ;;
+                testparm|smbpasswd) missing_pkgs+=(samba-common-bin) ;;
                 useradd|groupadd) missing_pkgs+=(passwd) ;;
                 curl) missing_pkgs+=(curl ca-certificates) ;;
                 tar) missing_pkgs+=(tar) ;;

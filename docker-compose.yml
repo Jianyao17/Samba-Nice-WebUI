@@ -26,3 +26,11 @@ services:
       - /var/run/samba:/var/run/samba
       # 3. Mount host storage root to /storage inside container
       - ${HOST_STORAGE_PATH:-/srv/samba}:/storage
+      # 4. Host identity database. Required for the Users page to see and
+      #    manage host Samba accounts; remove these lines to disable the
+      #    feature. They grant the container write access to host credentials.
+      - /var/lib/samba/private:/var/lib/samba/private
+      - /etc/passwd:/etc/passwd
+      - /etc/shadow:/etc/shadow
+      - /etc/gshadow:/etc/gshadow
+      - /etc/group:/etc/group

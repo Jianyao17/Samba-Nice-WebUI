@@ -26,23 +26,24 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --locked --no-dev --no-editable
 
 # ============================================================
-# Stage 2: samba — extract testparm and its runtime libraries.
+# Stage 2: samba — extract testparm/pdbedit and their runtime libraries.
 # ============================================================
 FROM python:3.12-slim-bookworm AS samba
 
+# pdbedit ships in the samba package, not samba-common-bin.
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends samba-common-bin \
+    && apt-get install -y --no-install-recommends samba \
     && rm -rf /var/lib/apt/lists/*
 
-COPY scripts/collect-testparm.sh /tmp/collect-testparm.sh
-RUN OUT=/out sh /tmp/collect-testparm.sh
+COPY scripts/collect-samba-tools.sh /tmp/collect-samba-tools.sh
+RUN OUT=/out sh /tmp/collect-samba-tools.sh
 
 # ============================================================
 # Stage 3: runtime — the minimal final image.
 # ============================================================
 FROM python:3.12-slim-bookworm AS runtime
 
-# 1. Copy testparm and its libraries from the samba stage, then update the linker cache
+# 1. Copy testparm/pdbedit and their libraries from the samba stage, then update the linker cache
 COPY --from=samba /out/ /
 RUN ldconfig \
     && mkdir -p /var/lib/samba /var/cache/samba /run/samba

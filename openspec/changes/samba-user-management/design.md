@@ -110,8 +110,9 @@ container eliminates cross-container user database synchronisation issues entire
 ### D6 — WebUI-Docker: bind mount user database files from host
 
 **Decision:** The production Docker image documentation and user compose setup
-instruct users to bind mount four host paths when user management is desired:
-`/etc/passwd`, `/etc/shadow`, `/etc/group`, and `/var/lib/samba/private`.
+instruct users to bind mount five host paths when user management is desired:
+`/etc/passwd`, `/etc/shadow`, `/etc/group`, `/etc/gshadow`, and
+`/var/lib/samba/private`.
 
 **Rationale:** These bind mounts allow the containerized WebUI to execute `useradd` and
 `smbpasswd` directly against host identity files, using the exact same code path as
@@ -155,8 +156,10 @@ permissions for subsequent operations.
   handling so `docker run --rm samba-nice-test` still runs pytest seamlessly.
 
 - **[useradd availability in production Dockerfile]** → Production image requires `passwd`
-  and `samba-common-bin` packages in the runtime stage.
-  Mitigation: Add them to the runtime stage apt install and verify build in CI.
+  and `samba-common-bin` packages in the runtime stage, while `pdbedit` lives in the
+  `samba` package.
+  Mitigation: Add `passwd` and `samba-common-bin` to the runtime stage, extract
+  `testparm`/`pdbedit` from a `samba` builder stage, and verify the build in CI.
 
 ## Migration Plan
 
