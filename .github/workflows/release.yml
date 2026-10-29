@@ -42,11 +42,10 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.IMAGE_NAME }}
+          # Publish the version without the leading "v" plus "latest"
           tags: |
-            type=ref,event=branch
             type=semver,pattern={{version}}
-            type=sha
-            type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=latest
 
       - uses: docker/build-push-action@v6
         with:
