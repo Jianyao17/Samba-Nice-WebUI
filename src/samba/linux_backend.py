@@ -1,6 +1,6 @@
-import logging
 import os
 import signal
+import logging
 import subprocess
 from datetime import datetime
 from pathlib import Path
@@ -196,27 +196,54 @@ class LinuxHostSambaBackend(SambaBackend):
         return True
 
     def reload_service(self) -> bool:
-        # 1. Verify existence of the PID file
-        if not self.pid_file.exists():
+        # 1. Read the master smbd PID from the shared run directory
+        try:
+            pid = int(self.pid_file.read_text(encoding="utf-8").strip())
+        except FileNotFoundError:
             logger.warning(
-                "Cannot reload smbd: PID file %s does not exist.",
+                "Cannot reload smbd: PID file %s does not exist. "
+                "Mount the host /var/run/samba directory into the container.",
                 self.pid_file,
             )
             return False
-
-        try:
-            # 2. Read master smbd PID
-            pid = int(self.pid_file.read_text().strip())
-
-            # 3. Send SIGHUP to trigger zero-downtime configuration reload
-            os.kill(pid, signal.SIGHUP)
-            self.last_reloaded_at = datetime.now()
-            return True
-
         except (ValueError, OSError) as exc:
             logger.warning(
-                "Cannot signal smbd from PID file %s: %s",
+                "Cannot read the smbd PID from %s: %s",
                 self.pid_file,
                 exc,
             )
             return False
+
+        if pid <= 0:
+            logger.warning(
+                "Cannot reload smbd: PID file %s contains an invalid PID %d.",
+                self.pid_file,
+                pid,
+            )
+            return False
+
+        # 2. Send SIGHUP so smbd re-reads its configuration without downtime
+        try:
+            os.kill(pid, signal.SIGHUP)
+        except PermissionError as exc:
+            logger.warning(
+                "Cannot signal smbd (PID %d): %s. The container is not allowed "
+                "to signal the host daemon. Run the container with "
+                "security_opt apparmor=unconfined; SELinux hosts need "
+                "label=disable.",
+                pid,
+                exc,
+            )
+            return False
+        except OSError as exc:
+            logger.warning(
+                "Cannot signal smbd (PID %d) from PID file %s: %s. "
+                "A shared PID namespace is required (pid: host).",
+                pid,
+                self.pid_file,
+                exc,
+            )
+            return False
+
+        self.last_reloaded_at = datetime.now()
+        return True

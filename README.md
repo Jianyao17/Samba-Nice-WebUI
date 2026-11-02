@@ -89,6 +89,9 @@ services:
     container_name: samba-nice-webui
     restart: unless-stopped
     pid: "host"            # needed to send SIGHUP to the host's smbd
+    security_opt:          # allows the reload signal on AppArmor hosts
+      - label=disable
+      - apparmor=unconfined
     ports:
       - "8082:8080"
     environment:
@@ -186,7 +189,25 @@ docker exec samba-nice-webui kill -HUP "$(cat /var/run/samba/smbd.pid)"
 
 `No such process` means the PID namespace is not shared; `Operation not
 permitted` means the container runs without permission to signal the host
-daemon (for example rootless Docker or a user namespace remap).
+daemon (for example rootless Docker or a user namespace remap). `Permission
+denied` means a security module blocks the signal, which is the normal result on
+Ubuntu because the container runs under the `docker-default` AppArmor profile
+and cannot signal the unconfined host `smbd`.
+
+Disable AppArmor for this container in the compose file, then recreate it:
+
+```yaml
+    security_opt:
+      - apparmor=unconfined
+```
+
+```bash
+docker compose up -d --force-recreate
+```
+
+The container already runs as root with access to `/etc/samba` and the host
+identity files, so removing AppArmor confinement for it adds little exposure.
+On SELinux hosts use `security_opt: ["label=disable"]` instead.
 
 ## ⚙️ Environment Variables
 
